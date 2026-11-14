@@ -1,0 +1,6 @@
+# Stage B scoring tolerances.
+# status: provisional. Tune on the dev split only, then set frozen: true and record the commit hash.
+frozen: false
+frozen_at_commit: null
+position_tolerance_m: 0.5   # placeholder, not yet tuned
+time_tolerance_s: 60.0      # placeholder, not yet tuned
