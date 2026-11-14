@@ -52,6 +52,18 @@ SPECS = {
 }
 
 
+def _as_range(r):
+    """[t] -> (t, t); [a, b] -> (a, b); anything else raises ValueError."""
+    if not r:
+        return None
+    r = [float(x) for x in r]
+    if len(r) == 1:
+        return (r[0], r[0])
+    if len(r) == 2:
+        return (r[0], r[1])
+    raise ValueError("time_range needs 1 or 2 numbers")
+
+
 def format_entry(e: Entry) -> str:
     valid = "" if e.valid_to >= OPEN_END else f" valid_until={e.valid_to:.0f}s"
     obj = f" object={e.object}" if e.object else ""
@@ -73,8 +85,8 @@ class Toolbox:
             return f"error: unknown tool {name!r}", []
         try:
             entries = fn(**args)
-        except TypeError as exc:
-            return f"error: bad arguments ({exc})", []
+        except (TypeError, ValueError, KeyError, IndexError) as exc:  # arguments come from a model
+            return f"error: bad arguments ({type(exc).__name__}: {exc})", []
         if isinstance(entries, str):
             return entries, []
         if not entries:
@@ -103,7 +115,7 @@ class Toolbox:
         if position is not None and radius is None:
             return "error: position needs a radius"
         hits = self.store.search(self._vec(query), k or self.default_k,
-                                 time_range=tuple(time_range) if time_range else None,
+                                 time_range=_as_range(time_range),
                                  position=position, radius=radius, object=object)
         return [e for e, _ in hits]
 

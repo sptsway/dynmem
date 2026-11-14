@@ -47,3 +47,18 @@ def test_unknown_tool_and_specs():
     tb = toolbox()
     assert tb.call("nope", {})[0].startswith("error")
     assert [s["name"] for s in tb.specs(["search", "object_history"])] == ["search", "object_history"]
+
+
+def test_single_value_time_range_is_a_point_range():
+    _, ids = toolbox().call("search", {"query": "mug", "time_range": [105]})
+    assert ids == [1]
+
+
+def test_malformed_arguments_return_errors_not_exceptions():
+    tb = toolbox()
+    for args in ({"time_range": [1, 2, 3]}, {"time_range": ["a"]}, {"position": [0, 0], "radius": 1.0},
+                 {"k": "many"}):
+        out, ids = tb.call("search", args)
+        assert ids == [] or isinstance(out, str)  # never raises
+    assert tb.call("search", {"time_range": [1, 2, 3]})[0].startswith("error")
+    assert tb.call("search_time", {"time_or_range": []})[0].startswith("error")
