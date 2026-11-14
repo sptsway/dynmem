@@ -8,6 +8,8 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import yaml
@@ -36,6 +38,11 @@ def git_hash() -> str:
         return "unknown"
 
 
+def _locked(lock, fn, x):
+    with lock:
+        return fn(x)
+
+
 def done_ids(path: Path) -> set[str]:
     if not path.exists():
         return set()
@@ -53,6 +60,7 @@ def main(argv=None):
     ap.add_argument("--blind", action="store_true", help="also run the no-memory baseline")
     ap.add_argument("--qtypes", nargs="+", default=None)
     ap.add_argument("--limit", type=int, default=None, help="questions per timeline (smoke tests)")
+    ap.add_argument("--workers", type=int, default=1, help="questions in flight (API backends)")
     ap.add_argument("--out", default="results/stage_b")
     a = ap.parse_args(argv)
 
@@ -67,6 +75,9 @@ def main(argv=None):
     pred_recs = {r.id: r for r in (load_recording(DEFAULT_ROOT, i, "pred_event", thr) for i in ids)}
 
     emb = Embedder()
+    emb_lock = threading.Lock()  # torch/MPS encode is not shared across threads
+    embed_docs = lambda x: _locked(emb_lock, emb.embed_docs, x)
+    embed_query = lambda x: _locked(emb_lock, emb.embed_query, x)
     ag = models["agent"]
     llm = make_llm(ag["provider"], ag["model"], tag=f"stage_b_{a.split}",
                    extra_params=models.get(ag["provider"]))
@@ -92,21 +103,24 @@ def main(argv=None):
             for name, pol, design in runs:
                 path = out_dir / f"{source}__{name}.jsonl"
                 have = done_ids(path)
-                with path.open("a") as f:
-                    for q in qs:
-                        if q.id in have:
-                            continue
-                        if pol is None:
-                            agent = Agent(llm, None, [])
-                        else:
-                            store = QdrantStore(emb.dim)
-                            build_memory(store, pol, list(events), q.t_query, emb.embed_docs, source, initial=initial)
-                            agent = Agent(llm, Toolbox(store, emb.embed_query), DESIGNS[design])
-                        r = agent.run(q.text)
-                        s = score_answer(q.qtype, r.answer.model_dump() if r.answer else None, q.gt, scoring)
-                        f.write(json.dumps({"qid": q.id, "timeline": seed, "source": source, "cell": name,
-                                            "qtype": q.qtype, "question": q.text, "gt": q.gt, "score": s,
-                                            "parsed": r.answer is not None, **r.to_dict(), **meta}) + "\n")
+                todo = [q for q in qs if q.id not in have]
+
+                def run_one(q, pol=pol, design=design, name=name, source=source, events=events, seed=seed):
+                    if pol is None:
+                        agent = Agent(llm, None, [])
+                    else:
+                        store = QdrantStore(emb.dim)
+                        build_memory(store, pol, list(events), q.t_query, embed_docs, source, initial=initial)
+                        agent = Agent(llm, Toolbox(store, embed_query), DESIGNS[design])
+                    r = agent.run(q.text)
+                    s = score_answer(q.qtype, r.answer.model_dump() if r.answer else None, q.gt, scoring)
+                    return {"qid": q.id, "timeline": seed, "source": source, "cell": name,
+                            "qtype": q.qtype, "question": q.text, "gt": q.gt, "score": s,
+                            "parsed": r.answer is not None, **r.to_dict(), **meta}
+
+                with path.open("a") as f, ThreadPoolExecutor(a.workers) as pool:
+                    for row in pool.map(run_one, todo):  # results come back in question order
+                        f.write(json.dumps(row) + "\n")
                         f.flush()
                 print(f"seed {seed} {source} {name}: done ({len(qs)} questions)", flush=True)
 

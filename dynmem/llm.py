@@ -11,6 +11,7 @@ import json
 import os
 import random
 import sqlite3
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -96,7 +97,8 @@ class LLM:
         self.extra_params = dict(extra_params or {})
         self.cache_path = Path(cache_path)
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(self.cache_path)
+        self.db = sqlite3.connect(self.cache_path, check_same_thread=False)
+        self._lock = threading.Lock()  # one sqlite connection shared by worker threads
         self.db.executescript(
             """
             CREATE TABLE IF NOT EXISTS calls (
@@ -114,7 +116,8 @@ class LLM:
         params = {"temperature": temperature, "max_output_tokens": max_output_tokens, **self.extra_params, **extra}
         provider = self.backend.provider
         key = cache_key(provider, self.model, messages, tools, params)
-        row = self.db.execute("SELECT response FROM calls WHERE key=?", (key,)).fetchone()
+        with self._lock:
+            row = self.db.execute("SELECT response FROM calls WHERE key=?", (key,)).fetchone()
         if row:
             resp = Response.from_json(row[0], cached=True)
             self._log(key, resp)
@@ -123,7 +126,7 @@ class LLM:
         t0 = time.perf_counter()
         resp = self._call_with_backoff(messages, tools, params)
         resp.latency_s = time.perf_counter() - t0
-        with self.db:
+        with self._lock, self.db:
             self.db.execute("INSERT OR REPLACE INTO calls VALUES (?,?,?,?)",
                             (key, provider, self.model, resp.to_json()))
         self._log(key, resp)
@@ -140,7 +143,7 @@ class LLM:
         raise AssertionError("unreachable")
 
     def _log(self, key: str, resp: Response) -> None:
-        with self.db:
+        with self._lock, self.db:
             self.db.execute(
                 "INSERT INTO call_log VALUES (?,?,?,?,?,?,?,?,?)",
                 (time.time(), key, self.backend.provider, self.model, self.tag,
@@ -165,6 +168,8 @@ class GeminiBackend:
         self.client = genai.Client(api_key=_require_key("gemini"))
 
     def call(self, model, messages, tools, params) -> Response:
+        import base64
+
         from google.genai import errors, types
 
         contents, system = [], None
@@ -178,7 +183,9 @@ class GeminiBackend:
             if m.get("text"):
                 parts.append(types.Part.from_text(text=m["text"]))
             for tc in m.get("tool_calls", []):
-                parts.append(types.Part(function_call=types.FunctionCall(name=tc["name"], args=tc["args"])))
+                sig = base64.b64decode(tc["sig"]) if tc.get("sig") else None
+                parts.append(types.Part(function_call=types.FunctionCall(name=tc["name"], args=tc["args"]),
+                                        thought_signature=sig))
             for tr in m.get("tool_results", []):
                 parts.append(types.Part.from_function_response(
                     name=tr["name"], response={"result": tr["content"]}))
@@ -199,13 +206,18 @@ class GeminiBackend:
                 raise RetryableError(str(exc)) from exc
             raise
         calls = []
-        for i, fc in enumerate(r.function_calls or []):
-            calls.append({"id": f"call_{i}", "name": fc.name, "args": dict(fc.args or {})})
+        for part in (r.candidates[0].content.parts or []) if r.candidates else []:
+            if part.function_call:  # Gemini 3.x needs the thought signature back when the call is replayed
+                fc = part.function_call
+                call = {"id": f"call_{len(calls)}", "name": fc.name, "args": dict(fc.args or {})}
+                if part.thought_signature:
+                    call["sig"] = base64.b64encode(part.thought_signature).decode()
+                calls.append(call)
         u = r.usage_metadata
         return Response(
             text=r.text if not calls else None, tool_calls=calls,
             input_tokens=(u.prompt_token_count or 0) if u else 0,
-            output_tokens=(u.candidates_token_count or 0) if u else 0,
+            output_tokens=((u.candidates_token_count or 0) + (u.thoughts_token_count or 0)) if u else 0,  # thinking is billed as output
         )
 
 

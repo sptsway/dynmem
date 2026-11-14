@@ -48,3 +48,8 @@ Each entry: what the plan said, what was found, what was done.
 14. **Memory footprint.** With `num_ctx: 8192`, Ollama's MLX runner used 16 GB and pushed swap to 12.8 of 13.3 GB
     during the first dev run, which was stopped. The largest observed call was 3,076 input tokens, so `num_ctx`
     is now 5120 (7.7 GB resident). Backend settings are part of the cache key. Results from the stopped run were discarded.
+15. **Gemini access.** The key available is on the Gemini API free tier: 5 requests per minute per model
+    (`generate_content_free_tier_requests`, 429 on exceeding). At about 3 calls per question, the dev run
+    (about 1,300 calls) would take about 4 h and the planned test grid (about 30,000 calls) about 100 h, so Gemini
+    cannot be the main backend without a paid tier. Gemini 3.x needs the `thought_signature` returned on function
+    calls to be replayed; the backend now does this (found in a live test). `gemini-2.5-pro` is closed to new keys.

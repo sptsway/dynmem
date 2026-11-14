@@ -1,16 +1,19 @@
-# Model IDs verified against the local Ollama server (`ollama list`) on 2026-11-14.
-# No paid API keys are available, so the local backend is the primary one.
+# Model IDs verified against the Gemini API model list (generateContent) and a live tool-call round trip on 2026-11-14.
+# gemini-2.5-pro is closed to new keys (404). gemini-3.8-flash returned 503 (high demand) during the probe.
 agent:
-  provider: ollama
-  model: qwen3.5:9b      # 9.7B, nvfp4, tools + vision, 7.6 GB
+  provider: gemini
+  model: gemini-3.5-flash      # tool-calling round trip OK (about 8 s per call, thinking on by default)
 captioner:
-  provider: ollama
-  model: qwen3.5:9b      # vision capable; only needed if Stage A runs
+  provider: gemini
+  model: gemini-3.1-flash-lite # cheapest multimodal flash-tier model that passed the probe; used only if Stage A runs
 judge:
+  provider: gemini
+  model: gemini-3.1-flash-lite # differs from the agent model; used only for Stage A free-text answers
+local_baseline:                # optional, memory heavy (see DEVIATIONS.md item 14)
   provider: ollama
-  model: qwen3.5:9b      # same model as the agent; flagged as a limitation (no independent judge)
+  model: qwen3.5:9b
 ollama:
-  num_ctx: 5120   # largest observed call was 3076 input tokens; 8192 pushed the machine into swap
-  think: false           # thinking disabled for speed and determinism
+  num_ctx: 5120
+  think: false
 embedder: mixedbread-ai/mxbai-embed-large-v1
-prices: {}               # local inference, no API cost
+prices: {}                     # not set: prices are not verified, so COSTS.md reports tokens only
