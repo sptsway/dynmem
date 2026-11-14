@@ -60,6 +60,7 @@ def main(argv=None):
     ap.add_argument("--blind", action="store_true", help="also run the no-memory baseline")
     ap.add_argument("--qtypes", nargs="+", default=None)
     ap.add_argument("--limit", type=int, default=None, help="questions per timeline (smoke tests)")
+    ap.add_argument("--agent", default="agent", help="key in configs/models.yaml: agent or local_baseline")
     ap.add_argument("--workers", type=int, default=1, help="questions in flight (API backends)")
     ap.add_argument("--out", default="results/stage_b")
     a = ap.parse_args(argv)
@@ -78,7 +79,7 @@ def main(argv=None):
     emb_lock = threading.Lock()  # torch/MPS encode is not shared across threads
     embed_docs = lambda x: _locked(emb_lock, emb.embed_docs, x)
     embed_query = lambda x: _locked(emb_lock, emb.embed_query, x)
-    ag = models["agent"]
+    ag = models[a.agent]
     llm = make_llm(ag["provider"], ag["model"], tag=f"stage_b_{a.split}",
                    extra_params=models.get(ag["provider"]))
     meta = {"git": git_hash(), "model": ag["model"], "provider": ag["provider"], "split": a.split}

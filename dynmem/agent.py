@@ -15,6 +15,7 @@ from dynmem.tools import Toolbox
 
 PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 MAX_ITERATIONS = 3
+MAX_EMPTY_RETRIES = 1  # per question
 
 
 class Answer(BaseModel):
@@ -69,6 +70,7 @@ class Agent:
         self.llm, self.toolbox, self.tool_names = llm, toolbox, list(tool_names)
         self.system = system_prompt or (PROMPTS / "agent_system.md").read_text()
         self.force = (PROMPTS / "agent_force_answer.md").read_text()
+        self.retry = (PROMPTS / "agent_retry.md").read_text()
         self.k_calls, self.max_out = max_calls_per_iteration, max_output_tokens
 
     def run(self, question: str) -> AgentResult:
@@ -76,7 +78,7 @@ class Agent:
         msgs = [{"role": "system", "text": self.system}, {"role": "user", "text": question}]
         res = AgentResult(None, None)
         specs = self.toolbox.specs(self.tool_names) if (self.toolbox and self.tool_names) else None
-        rounds = 0
+        rounds = empty_retries = 0
         while True:
             use_tools = specs if (specs and rounds < MAX_ITERATIONS) else None
             if specs and not use_tools:
@@ -84,6 +86,12 @@ class Agent:
             r = self.llm.generate(msgs, tools=use_tools, max_output_tokens=self.max_out)
             res.input_tokens += r.input_tokens
             res.output_tokens += r.output_tokens
+            if not r.tool_calls and not (r.text or "").strip() and empty_retries < MAX_EMPTY_RETRIES:
+                empty_retries += 1  # some local models return an empty turn when their tool call fails to parse
+                res.steps.append({"round": rounds, "tool": "<empty reply, retried>", "args": {},
+                                  "retrieved_ids": [], "result": "", "retrieval_s": 0.0})
+                msgs.append({"role": "user", "text": self.retry})
+                continue
             if not (use_tools and r.tool_calls):
                 res.raw = r.text
                 res.answer = parse_answer(r.text)

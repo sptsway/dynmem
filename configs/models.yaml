@@ -9,7 +9,10 @@ captioner:
 judge:
   provider: gemini
   model: gemini-3.1-flash-lite # differs from the agent model; used only for Stage A free-text answers
-local_baseline:                # optional, memory heavy (see DEVIATIONS.md item 14)
+local_baseline:                # local, free; fits next to a busy desktop (about 5 GB resident)
+  provider: ollama
+  model: qwen2.5:7b            # 7.6B Q4_K_M, tools, llama.cpp runner
+local_qwen35:                  # tested, 14 GB resident on the MLX runner: too heavy here (DEVIATIONS.md item 14)
   provider: ollama
   model: qwen3.5:9b
 ollama:

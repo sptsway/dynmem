@@ -85,3 +85,15 @@ def test_blind_baseline_has_no_tools(tmp_path):
     llm = LLM(be, "m", cache_path=tmp_path / "c.sqlite")
     r = Agent(llm, None, []).run("q")
     assert be.seen[0][1] is None and r.n_tool_calls == 0
+
+
+def test_empty_reply_is_retried_once_with_a_nudge(tmp_path):
+    ag, be = setup(tmp_path, [Response("", [], 1, 0), Response(FINAL, [], 1, 1)])
+    r = ag.run("q")
+    assert r.answer is not None and r.steps[0]["tool"].startswith("<empty")
+    assert "empty or was not a valid tool call" in be.seen[1][0][-1]["text"]
+
+
+def test_empty_replies_beyond_the_retry_budget_fail(tmp_path):
+    ag, _ = setup(tmp_path, [Response("", [], 1, 0), Response("", [], 1, 0)])
+    assert ag.run("q").answer is None

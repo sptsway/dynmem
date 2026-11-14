@@ -53,3 +53,11 @@ Each entry: what the plan said, what was found, what was done.
     (about 1,300 calls) would take about 4 h and the planned test grid (about 30,000 calls) about 100 h, so Gemini
     cannot be the main backend without a paid tier. Gemini 3.x needs the `thought_signature` returned on function
     calls to be replayed; the backend now does this (found in a live test). `gemini-2.5-pro` is closed to new keys.
+16. **Local model changed to `qwen2.5:7b`.** `qwen3.5:9b` grew to about 14 GB on Ollama's MLX runner and pushed the
+    machine into heavy swap (free memory 20%, swap 4.5 to 10.4 GB within 7 min) with the browser open. `qwen2.5:7b`
+    (Q4_K_M, llama.cpp runner) uses 5.0 GB and the machine stays at 36 to 61% free. It is a weaker model than Gemini
+    or Qwen 3.5, so absolute accuracy is lower.
+17. **Empty-reply retry.** With the five-tool design (R1) Qwen2.5-7B sometimes emits a tool call that Ollama cannot
+    parse, so the turn comes back empty. The agent now retries once per question with a fixed corrective message
+    (`prompts/agent_retry.md`). It applies to every cell and is visible in the trace as `<empty reply, retried>`.
+    A second empty reply, or any non-JSON final answer, is a parse failure and scores 0.
