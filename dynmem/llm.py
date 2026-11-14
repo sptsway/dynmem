@@ -178,8 +178,7 @@ class GeminiBackend:
                 parts.append(types.Part.from_text(text=m["text"]))
             for tc in m.get("tool_calls", []):
                 parts.append(types.Part(function_call=types.FunctionCall(name=tc["name"], args=tc["args"])))
-            if m.get("tool_result"):
-                tr = m["tool_result"]
+            for tr in m.get("tool_results", []):
                 parts.append(types.Part.from_function_response(
                     name=tr["name"], response={"result": tr["content"]}))
             contents.append(types.Content(role="model" if m["role"] == "assistant" else "user", parts=parts))
@@ -235,8 +234,7 @@ class AnthropicBackend:
                 blocks.append({"type": "text", "text": m["text"]})
             for tc in m.get("tool_calls", []):
                 blocks.append({"type": "tool_use", "id": tc["id"], "name": tc["name"], "input": tc["args"]})
-            if m.get("tool_result"):
-                tr = m["tool_result"]
+            for tr in m.get("tool_results", []):
                 blocks.append({"type": "tool_result", "tool_use_id": tr["id"], "content": tr["content"]})
             out.append({"role": "assistant" if m["role"] == "assistant" else "user", "content": blocks})
 
