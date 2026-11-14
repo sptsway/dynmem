@@ -76,3 +76,9 @@ Each entry: what the plan said, what was found, what was done.
 20. **Runner speed.** The first test-run rate was about 8.5 s per run because event texts were re-embedded for every
     question. A shared text-to-vector cache in `dynmem/stage_b/run.py` removed that overhead. Prompts, tools and
     scoring were not touched and stay frozen.
+21. **Test-run size (cut order).** Plan: 150 to 200 questions per timeline. On the test split the model needed 6 to 14 s
+    per question and cell (larger memories, three tool calls), so the full design (150 questions, 3 timelines,
+    2 sources, 7 cells) would take about 16 h. Reduced to 60 questions per timeline (12 per type): 3 timelines,
+    180 questions per cell, 2,520 runs. Timelines are kept at 3 (the must-have core). The largest single prompt
+    was 2,380 tokens, below `num_ctx` 5120, so no prompt was truncated. A first partial run with 150 questions
+    per timeline (244 results) was discarded to keep one question set.

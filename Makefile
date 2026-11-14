@@ -16,7 +16,7 @@ stage_a:
 
 stage_b:
 	$(PY) -m dynmem.stage_b.run --split test --agent local_baseline --out results/stage_b_local \
-		--timelines 1 2 3 --n-per-type 30 --sources gt_event pred_event --blind
+		--timelines 1 2 3 --n-per-type 12 --sources gt_event pred_event --blind
 
 costs:
 	$(PY) -m dynmem.costs
