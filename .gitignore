@@ -30,3 +30,7 @@ qdrant_data/
 # smoke-test outputs
 results/smoke/
 *.log
+
+# raw dataset folders unpacked next to the code
+Final_Dataset/
+Final_Scan/
