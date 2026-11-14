@@ -90,3 +90,32 @@ def test_api_key_never_reaches_cache_file(tmp_path, monkeypatch):
     llm.generate(MSG)
     llm.db.commit()
     assert secret.encode() not in Path(tmp_path / "c.sqlite").read_bytes()
+
+
+def test_ollama_backend_request_and_parse(monkeypatch):
+    import io
+    import json
+    import urllib.request
+
+    from dynmem.llm import OllamaBackend
+
+    seen = {}
+
+    def fake_urlopen(req, timeout=0):
+        seen["body"] = json.loads(req.data)
+        reply = {"message": {"content": "", "tool_calls": [{"function": {"name": "search", "arguments": {"query": "mug"}}}]},
+                 "prompt_eval_count": 12, "eval_count": 4}
+        return io.BytesIO(json.dumps(reply).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    msgs = [{"role": "system", "text": "s"}, {"role": "user", "text": "q"},
+            {"role": "assistant", "text": None, "tool_calls": [{"id": "c", "name": "search", "args": {"query": "x"}}]},
+            {"role": "user", "tool_results": [{"id": "c", "name": "search", "content": "r"}]}]
+    spec = [{"name": "search", "description": "d", "parameters": {"type": "object", "properties": {}}}]
+    r = OllamaBackend().call("m", msgs, spec, {"temperature": 0.0, "max_output_tokens": 50})
+    assert r.tool_calls == [{"id": "call_0", "name": "search", "args": {"query": "mug"}}] and r.text is None
+    assert (r.input_tokens, r.output_tokens) == (12, 4)
+    b = seen["body"]
+    assert b["think"] is False and b["options"]["temperature"] == 0.0 and b["options"]["seed"] == 0
+    assert [m["role"] for m in b["messages"]] == ["system", "user", "assistant", "tool"]
+    assert b["tools"][0]["function"]["name"] == "search"

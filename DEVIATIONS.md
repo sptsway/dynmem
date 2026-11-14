@@ -14,3 +14,13 @@ Each entry: what the plan said, what was found, what was done.
 4. **Scan frame.** Point-cloud bounds: x [-2.28, 3.70], y [-0.56, 1.73], z [-1.96, 3.00] metres.
    y is the vertical axis. The sanity check for placed-object positions will use this box once
    `icp_aligned_pose.npy` files are available.
+5. **No API keys.** Plan: Gemini primary, Anthropic optional, `GEMINI_API_KEY` required. Found: the user has
+   subscriptions only. Decision (user's choice): the local backend is primary. Added `OllamaBackend`
+   (Ollama HTTP API, no key). `claude -p` and subscription logins are still not used.
+6. **Model.** The user mentioned Qwen2.5-7B; that model is not installed. Installed: `qwen3.5:9b`
+   (9.7B, nvfp4, tools and vision), `qwen3.5:0.8b`, `tinyllama`. Using `qwen3.5:9b` for the agent,
+   paraphrasing and (if Stage A runs) captioning. Thinking is disabled (`think: false`).
+   Consequences: absolute accuracy is not comparable to the Gemini/GPT-4o numbers in ReMEmbR; the judge for
+   free-text answers is the same model as the agent, so there is no independent judge.
+7. **Ollama on this Mac.** The server log reported CPU compute (GPU discovery timed out) on first start.
+   Probe latency was 2 to 6 s per question on a toy memory. To be re-measured on real runs.

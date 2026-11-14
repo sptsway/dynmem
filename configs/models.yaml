@@ -1,0 +1,16 @@
+# Model IDs verified against the local Ollama server (`ollama list`) on 2026-11-14.
+# No paid API keys are available, so the local backend is the primary one.
+agent:
+  provider: ollama
+  model: qwen3.5:9b      # 9.7B, nvfp4, tools + vision, 7.6 GB
+captioner:
+  provider: ollama
+  model: qwen3.5:9b      # vision capable; only needed if Stage A runs
+judge:
+  provider: ollama
+  model: qwen3.5:9b      # same model as the agent; flagged as a limitation (no independent judge)
+ollama:
+  num_ctx: 8192
+  think: false           # thinking disabled for speed and determinism
+embedder: mixedbread-ai/mxbai-embed-large-v1
+prices: {}               # local inference, no API cost

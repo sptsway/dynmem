@@ -258,8 +258,60 @@ class AnthropicBackend:
                         input_tokens=r.usage.input_tokens, output_tokens=r.usage.output_tokens)
 
 
+class OllamaBackend:
+    """Local models through the Ollama HTTP API. No key needed."""
+    provider = "ollama"
+
+    def __init__(self, host: str | None = None, num_ctx: int = 8192, think: bool = False):
+        self.host = (host or os.environ.get("OLLAMA_HOST") or "http://127.0.0.1:11434").rstrip("/")
+        if not self.host.startswith("http"):
+            self.host = "http://" + self.host
+        self.num_ctx, self.think = num_ctx, think
+
+    def call(self, model, messages, tools, params) -> Response:
+        import base64
+        import urllib.error
+        import urllib.request
+
+        out = []
+        for m in messages:
+            if m.get("tool_results"):
+                out += [{"role": "tool", "tool_name": tr["name"], "content": tr["content"]} for tr in m["tool_results"]]
+                continue
+            d: dict[str, Any] = {"role": m["role"], "content": m.get("text") or ""}
+            if m.get("images"):
+                d["images"] = [base64.b64encode(i if isinstance(i, bytes) else Path(i).read_bytes()).decode()
+                               for i in m["images"]]
+            if m.get("tool_calls"):
+                d["tool_calls"] = [{"function": {"name": tc["name"], "arguments": tc["args"]}} for tc in m["tool_calls"]]
+            out.append(d)
+        body: dict[str, Any] = {
+            "model": model, "messages": out, "stream": False, "think": self.think,
+            "options": {"temperature": params["temperature"], "seed": params.get("seed", 0),
+                        "num_predict": params["max_output_tokens"], "num_ctx": self.num_ctx},
+        }
+        if tools:
+            body["tools"] = [{"type": "function", "function": t} for t in tools]
+        req = urllib.request.Request(f"{self.host}/api/chat", json.dumps(body).encode(),
+                                     {"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=600) as r:
+                d = json.load(r)
+        except urllib.error.HTTPError as exc:
+            if exc.code >= 500:
+                raise RetryableError(f"ollama {exc.code}") from exc
+            raise
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"cannot reach Ollama at {self.host}; run `ollama serve`") from exc
+        msg = d["message"]
+        calls = [{"id": f"call_{i}", "name": c["function"]["name"], "args": dict(c["function"].get("arguments") or {})}
+                 for i, c in enumerate(msg.get("tool_calls") or [])]
+        return Response(text=(msg.get("content") or None) if not calls else None, tool_calls=calls,
+                        input_tokens=d.get("prompt_eval_count", 0), output_tokens=d.get("eval_count", 0))
+
+
 def make_llm(provider: str, model: str, tag: str = "", cache_path=DEFAULT_CACHE) -> LLM:
-    backends = {"gemini": GeminiBackend, "anthropic": AnthropicBackend}
+    backends = {"gemini": GeminiBackend, "anthropic": AnthropicBackend, "ollama": OllamaBackend}
     if provider not in backends:
-        raise ValueError(f"unknown provider {provider!r}; 'local' is only added if the user asks")
+        raise ValueError(f"unknown provider {provider!r}; choose gemini, anthropic or ollama")
     return LLM(backends[provider](), model, cache_path=cache_path, tag=tag)
