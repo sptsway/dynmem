@@ -1,0 +1,28 @@
+# never commit agent prompts / context notes
+context.md
+prompts.md
+dynmem_agent_prompt.md
+**/context.md
+**/prompts.md
+
+# secrets
+.env
+.env.*
+
+# python / env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# data and caches (no dataset files in the repo)
+data/
+cache/
+qdrant_data/
+*.sqlite
+*.sqlite3
+*.vrs
+*.zip
+.DS_Store
