@@ -157,9 +157,10 @@ def fill_readme(block: str, path="README.md") -> None:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", default="test")
+    ap.add_argument("--root", default="results/stage_b_local", help="results directory holding <split>/*.jsonl")
     ap.add_argument("--readme", action="store_true")
     a = ap.parse_args(argv)
-    d = load(a.split)
+    d = load(a.split, a.root)
     s = summarise(d)
     s.to_csv(f"results/summary_stage_b_{a.split}.csv", index=False)
     cost_table(d).to_csv(f"results/cost_latency_{a.split}.csv", index=False)

@@ -6,7 +6,7 @@ test:
 	$(PY) -m pytest -q
 
 data:
-	@echo "data target: see dynmem/stage_a/navqa.py and dynmem/stage_b/zenodo.py"
+	$(PY) -m dynmem.stage_b.zenodo
 
 captions:
 	@echo "captions target: not implemented yet"
@@ -15,10 +15,11 @@ stage_a:
 	@echo "stage_a target: not implemented yet"
 
 stage_b:
-	@echo "stage_b target: not implemented yet"
+	$(PY) -m dynmem.stage_b.run --split test --agent local_baseline --out results/stage_b_local \
+		--timelines 1 2 3 --n-per-type 30 --sources gt_event pred_event --blind
 
 costs:
 	$(PY) -m dynmem.costs
 
 report:
-	$(PY) -m dynmem.report.make_figures
+	$(PY) -m dynmem.report.make_figures --split test --readme

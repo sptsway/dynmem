@@ -88,3 +88,11 @@ def extract_remote(name: str, out_dir: str | Path, basenames: tuple[str, ...] = 
                 z.extract(info, out_dir)
                 got.append(info.filename)
     return got
+
+
+if __name__ == "__main__":
+    # make data: scan archive (434 MB, MD5 checked) and the per-recording Stage B files by range requests.
+    scan = download("Final_Scan.zip")
+    extract_members(scan, ["Final_Scan/info.json", "Final_Scan/predictions.txt", "Final_Scan/aruco_pose.npy",
+                           "Final_Scan/mesh_labeled.ply"], "data/scan")
+    print(f"extracted {len(extract_remote('Final_Dataset.zip', 'data/lostfound'))} recording files")
