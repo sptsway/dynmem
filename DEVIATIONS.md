@@ -68,3 +68,11 @@ Each entry: what the plan said, what was found, what was done.
     the filter semantics; `prompts/agent_system.md` documents the memory format (entries starting "At the start" are
     initial states). The wording applies to all memory policies and retrieval designs. One tuning round only, to
     limit fit to the dev timeline; the result is frozen before any test run.
+19. **Archive checksum.** The user downloaded `Final_Dataset.zip` and unpacked it into `Final_Dataset/` (git-ignored).
+    The archive MD5 could not be computed from the unpacked folder. Instead, all 576 per-recording files used by
+    Stage B (fetched earlier by range request with zip CRC32 checks) were compared byte for byte with the user's copy:
+    576 of 576 identical, and the folder holds all 96 `.vrs` files (22.2 GB, equal to the total in the remote zip index).
+    `Final_Scan.zip` was verified by MD5 (item 3). Stage B reads `data/lostfound/`; the raw `.vrs` files are unused.
+20. **Runner speed.** The first test-run rate was about 8.5 s per run because event texts were re-embedded for every
+    question. A shared text-to-vector cache in `dynmem/stage_b/run.py` removed that overhead. Prompts, tools and
+    scoring were not touched and stay frozen.

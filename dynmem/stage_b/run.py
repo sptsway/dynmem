@@ -12,6 +12,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import numpy as np
 import yaml
 
 from dynmem.agent import Agent
@@ -77,7 +78,15 @@ def main(argv=None):
 
     emb = Embedder()
     emb_lock = threading.Lock()  # torch/MPS encode is not shared across threads
-    embed_docs = lambda x: _locked(emb_lock, emb.embed_docs, x)
+    text_cache: dict[str, "np.ndarray"] = {}  # event texts repeat across questions: embed each text once
+
+    def embed_docs(texts):
+        with emb_lock:
+            missing = [x for x in dict.fromkeys(texts) if x not in text_cache]
+            if missing:
+                text_cache.update(zip(missing, emb.embed_docs(missing)))
+            return np.array([text_cache[x] for x in texts])
+
     embed_query = lambda x: _locked(emb_lock, emb.embed_query, x)
     ag = models[a.agent]
     llm = make_llm(ag["provider"], ag["model"], tag=f"stage_b_{a.split}",
