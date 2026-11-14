@@ -29,3 +29,4 @@ qdrant_data/
 
 # smoke-test outputs
 results/smoke/
+*.log

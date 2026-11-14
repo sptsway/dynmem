@@ -91,8 +91,9 @@ class LLM:
     """Cached, retrying, logging wrapper around one backend."""
 
     def __init__(self, backend: Backend, model: str, cache_path: str | Path = DEFAULT_CACHE,
-                 tag: str = "", sleep=time.sleep):
+                 tag: str = "", sleep=time.sleep, extra_params: dict | None = None):
         self.backend, self.model, self.tag, self._sleep = backend, model, tag, sleep
+        self.extra_params = dict(extra_params or {})
         self.cache_path = Path(cache_path)
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.cache_path)
@@ -110,7 +111,7 @@ class LLM:
     def generate(self, messages: list[dict], tools: list[dict] | None = None,
                  temperature: float = 0.0, max_output_tokens: int = 2048,
                  **extra) -> Response:
-        params = {"temperature": temperature, "max_output_tokens": max_output_tokens, **extra}
+        params = {"temperature": temperature, "max_output_tokens": max_output_tokens, **self.extra_params, **extra}
         provider = self.backend.provider
         key = cache_key(provider, self.model, messages, tools, params)
         row = self.db.execute("SELECT response FROM calls WHERE key=?", (key,)).fetchone()
@@ -286,9 +287,10 @@ class OllamaBackend:
                 d["tool_calls"] = [{"function": {"name": tc["name"], "arguments": tc["args"]}} for tc in m["tool_calls"]]
             out.append(d)
         body: dict[str, Any] = {
-            "model": model, "messages": out, "stream": False, "think": self.think,
+            "model": model, "messages": out, "stream": False, "think": params.get("think", self.think),
             "options": {"temperature": params["temperature"], "seed": params.get("seed", 0),
-                        "num_predict": params["max_output_tokens"], "num_ctx": self.num_ctx},
+                        "num_predict": params["max_output_tokens"],
+                        "num_ctx": params.get("num_ctx", self.num_ctx)},
         }
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
@@ -310,8 +312,9 @@ class OllamaBackend:
                         input_tokens=d.get("prompt_eval_count", 0), output_tokens=d.get("eval_count", 0))
 
 
-def make_llm(provider: str, model: str, tag: str = "", cache_path=DEFAULT_CACHE) -> LLM:
+def make_llm(provider: str, model: str, tag: str = "", cache_path=DEFAULT_CACHE,
+             extra_params: dict | None = None) -> LLM:
     backends = {"gemini": GeminiBackend, "anthropic": AnthropicBackend, "ollama": OllamaBackend}
     if provider not in backends:
         raise ValueError(f"unknown provider {provider!r}; choose gemini, anthropic or ollama")
-    return LLM(backends[provider](), model, cache_path=cache_path, tag=tag)
+    return LLM(backends[provider](), model, cache_path=cache_path, tag=tag, extra_params=extra_params)

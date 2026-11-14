@@ -10,7 +10,7 @@ judge:
   provider: ollama
   model: qwen3.5:9b      # same model as the agent; flagged as a limitation (no independent judge)
 ollama:
-  num_ctx: 8192
+  num_ctx: 5120   # largest observed call was 3076 input tokens; 8192 pushed the machine into swap
   think: false           # thinking disabled for speed and determinism
 embedder: mixedbread-ai/mxbai-embed-large-v1
 prices: {}               # local inference, no API cost

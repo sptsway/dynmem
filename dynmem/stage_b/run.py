@@ -68,7 +68,8 @@ def main(argv=None):
 
     emb = Embedder()
     ag = models["agent"]
-    llm = make_llm(ag["provider"], ag["model"], tag=f"stage_b_{a.split}")
+    llm = make_llm(ag["provider"], ag["model"], tag=f"stage_b_{a.split}",
+                   extra_params=models.get(ag["provider"]))
     meta = {"git": git_hash(), "model": ag["model"], "provider": ag["provider"], "split": a.split}
     out_dir = Path(a.out) / a.split
     out_dir.mkdir(parents=True, exist_ok=True)

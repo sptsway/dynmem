@@ -45,3 +45,6 @@ Each entry: what the plan said, what was found, what was done.
     0.25 m, time tolerance 10 s, chosen from dev perception-error statistics. On dev, predicted place poses have
     median error 0.045 m and max 2.161 m, so some predicted events are wrong by more than the tolerance.
     Each recording contains one move, so every timeline event is one recording.
+14. **Memory footprint.** With `num_ctx: 8192`, Ollama's MLX runner used 16 GB and pushed swap to 12.8 of 13.3 GB
+    during the first dev run, which was stopped. The largest observed call was 3,076 input tokens, so `num_ctx`
+    is now 5120 (7.7 GB resident). Backend settings are part of the cache key. Results from the stopped run were discarded.
