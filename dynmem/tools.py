@@ -22,7 +22,8 @@ SPECS = {
             "query": {"type": "string"}, "k": {"type": "integer"}}, "required": ["query"]},
     },
     "search_time": {
-        "description": "Memory entries around a time (seconds) or inside a [t_start, t_end] range, ordered by time.",
+        "description": ("Memory entries whose time span overlaps a time or a [t_start, t_end] range (seconds), ordered by time. "
+                        "Entries describe past events, so to include everything up to now use a range that starts at 0."),
         "parameters": {"type": "object", "properties": {
             "time_or_range": {"type": "array", "items": {"type": "number"},
                               "description": "[t] or [t_start, t_end] in seconds"},
@@ -36,7 +37,9 @@ SPECS = {
     },
     "search": {
         "description": ("Composed search: text similarity plus any of time range, position and radius, "
-                        "object name, in one call. Omit the filters you do not need."),
+                        "object name, in one call. Omit the filters you do not need (do not pass null). "
+                        "time_range keeps entries whose time span overlaps it; use [0, now] to include all past entries. "
+                        "position needs a radius."),
         "parameters": {"type": "object", "properties": {
             "query": {"type": "string"}, "time_range": RANGE, "position": XYZ,
             "radius": {"type": "number"}, "object": {"type": "string"}, "k": {"type": "integer"}}},
@@ -50,6 +53,16 @@ SPECS = {
         "parameters": {"type": "object", "properties": {"xyz": XYZ}, "required": ["xyz"]},
     },
 }
+
+
+def clean_args(args: dict) -> dict:
+    """Models often send explicit nulls for optional arguments. Treat those as absent."""
+    out = {}
+    for k, v in args.items():
+        if v is None or (isinstance(v, (list, tuple)) and (not v or any(x is None for x in v))):
+            continue
+        out[k] = v
+    return out
 
 
 def _as_range(r):
@@ -83,6 +96,7 @@ class Toolbox:
         fn = getattr(self, f"_{name}", None)
         if fn is None or name not in SPECS:
             return f"error: unknown tool {name!r}", []
+        args = clean_args(args)
         try:
             entries = fn(**args)
         except (TypeError, ValueError, KeyError, IndexError) as exc:  # arguments come from a model

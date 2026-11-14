@@ -61,3 +61,10 @@ Each entry: what the plan said, what was found, what was done.
     parse, so the turn comes back empty. The agent now retries once per question with a fixed corrective message
     (`prompts/agent_retry.md`). It applies to every cell and is visible in the trace as `<empty reply, retried>`.
     A second empty reply, or any non-JSON final answer, is a parse failure and scores 0.
+18. **Dev tuning round 1 (prompts and tool interface; dev split only).** Round-1 traces are kept in
+    `results/stage_b_local/dev_round1/`. Failures were interface problems, not policy problems: explicit null
+    arguments crashed tool calls, point time ranges at "now" matched nothing (the filter is span overlap), and the
+    initial entry was counted as a move. Changes: null arguments are dropped before the call; tool descriptions state
+    the filter semantics; `prompts/agent_system.md` documents the memory format (entries starting "At the start" are
+    initial states). The wording applies to all memory policies and retrieval designs. One tuning round only, to
+    limit fit to the dev timeline; the result is frozen before any test run.

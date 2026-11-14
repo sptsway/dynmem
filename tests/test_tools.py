@@ -62,3 +62,12 @@ def test_malformed_arguments_return_errors_not_exceptions():
         assert ids == [] or isinstance(out, str)  # never raises
     assert tb.call("search", {"time_range": [1, 2, 3]})[0].startswith("error")
     assert tb.call("search_time", {"time_or_range": []})[0].startswith("error")
+
+
+def test_null_arguments_are_treated_as_absent():
+    tb = toolbox()
+    _, ids = tb.call("search", {"query": "mug", "object": "mug", "position": [None, None, None],
+                                "radius": None, "time_range": None, "k": 5})
+    assert set(ids) == {0, 1}
+    out, _ = tb.call("search_time", {"time_or_range": [0, 200], "k": None})
+    assert not out.startswith("error")
