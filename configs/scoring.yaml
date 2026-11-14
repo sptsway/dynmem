@@ -3,8 +3,8 @@
 # place-time error max 2.8 s; move displacement median 2.41 m; timeline gaps >= 180 s.
 # Chosen from these perception-error numbers, not from agent accuracy.
 # Sensitivity (0.1 m and 0.5 m) is recomputed from stored answers in the analysis.
-# frozen is set to true only after prompt tuning is done; see frozen_at_commit.
-frozen: false
-frozen_at_commit: null
+# Frozen after one dev tuning round. Hashes of frozen files are in configs/frozen_hashes.json (enforced by a test).
+frozen: true
+frozen_at_commit: d60c994  # dev traces committed here; prompts, tools and tolerances unchanged afterwards
 position_tolerance_m: 0.25
 time_tolerance_s: 10.0
