@@ -42,3 +42,15 @@ def build_timeline(recordings: list[Recording], seed: int,
         t += r.duration
     events.sort(key=lambda e: (e.t_place, e.recording_id))
     return Timeline(seed, tuple(r.id for r in order), starts, tuple(events), t)
+
+
+def remap_events(tl: Timeline, recordings: list[Recording]) -> tuple[Event, ...]:
+    """Place another event source (e.g. predicted events) on the same timeline `tl`.
+
+    Recording start times come from `tl`, so both sources share one clock.
+    """
+    out = []
+    for r in recordings:
+        s = tl.starts[r.id]
+        out += [replace(e, t_pick=e.t_pick + s, t_place=e.t_place + s) for e in r.events]
+    return tuple(sorted(out, key=lambda e: (e.t_place, e.recording_id)))
