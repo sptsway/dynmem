@@ -16,6 +16,7 @@ dependencies = [
   "google-genai",
   "anthropic",
   "scipy",
+  "remotezip",
   "matplotlib",
   "tqdm",
 ]

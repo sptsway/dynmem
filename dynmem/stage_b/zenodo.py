@@ -66,3 +66,25 @@ def extract_members(path: str | Path, members: list[str], out_dir: str | Path) -
     with zipfile.ZipFile(path) as z:
         for m in members:
             z.extract(m, out_dir)
+
+
+# Per-recording files Stage B needs (about 4 MB for all 96 recordings).
+STAGE_B_FILES = ("gt_object.csv", "pred_object.csv", "gt_glasses.csv", "pred_glasses.csv",
+                 "icp_aligned_pose.npy", "results.json")
+
+
+def extract_remote(name: str, out_dir: str | Path, basenames: tuple[str, ...] = STAGE_B_FILES) -> list[str]:
+    """Fetch only the named per-recording files with HTTP range requests.
+
+    Reads the zip index from the end of the remote file and downloads each member on its own,
+    so the 22 GB of .vrs data is never transferred. Zip CRC32 is checked on every member.
+    """
+    from remotezip import RemoteZip
+
+    got = []
+    with RemoteZip(url(name)) as z:
+        for info in z.infolist():
+            if not info.is_dir() and info.filename.rsplit("/", 1)[-1] in basenames and info.filename.count("/") == 2:
+                z.extract(info, out_dir)
+                got.append(info.filename)
+    return got

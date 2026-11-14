@@ -24,3 +24,18 @@ Each entry: what the plan said, what was found, what was done.
    free-text answers is the same model as the agent, so there is no independent judge.
 7. **Ollama on this Mac.** The server log reported CPU compute (GPU discovery timed out) on first start.
    Probe latency was 2 to 6 s per question on a toy memory. To be re-measured on real runs.
+8. **Dataset access.** Plan: download `Final_Dataset.zip` (30.2 GB) and verify its MD5. Download speed was
+   about 0.8 MB/s (about 9 h). Stage B only needs six small files per recording (4.1 MB for all 96), so they are
+   fetched with HTTP range requests (`remotezip`), which skips the 22 GB of `.vrs` data. Zip CRC32 is checked
+   per member. The full download keeps running in the background so the archive MD5 can still be verified.
+9. **Timestamps and frames (verified on disk).** `gt_object.csv` / `pred_object.csv` columns:
+   `timestamp,tx,ty,tz,qx,qy,qz,qw`, three `#` header lines, parent frame `vicon`. Timestamps are Unix epoch
+   seconds at 30 Hz. Recordings are short: object motion spans 1.3 to 7.6 s (median 3.5 s), so each
+   recording is one pick-and-place. `icp_aligned_pose.npy` is a 4x4 matrix that maps scan -> recording. Applying
+   its inverse puts 192 of 192 start/final positions inside the scan bounding box; applying it forward puts 40
+   of 192 inside. Stage B uses the inverse.
+10. **Sanity check results (tests/test_coordinates.py).** Distance to the nearest scan point: start poses
+    median 0.016 m (max 0.341 m); final poses median 0.177 m (max 0.500 m). Final poses are object centres
+    placed at new spots, so they sit further from the original scan surface. Test thresholds are descriptive
+    (median < 0.25 m, max < 0.6 m), not tuned.
+11. **Object counts.** 9 objects, 10 or 11 recordings each (96 total).
