@@ -39,3 +39,9 @@ Each entry: what the plan said, what was found, what was done.
     placed at new spots, so they sit further from the original scan surface. Test thresholds are descriptive
     (median < 0.25 m, max < 0.6 m), not tuned.
 11. **Object counts.** 9 objects, 10 or 11 recordings each (96 total).
+12. **Dev/test split.** Stratified by object, seed 0: 27 dev and 69 test recordings, no overlap (3 dev per object).
+    Plan said 30% dev; rounding by object gives 28%.
+13. **Dev tuning (see `configs/events.yaml`, `configs/scoring.yaml`).** Speed threshold 0.1 m/s. Position tolerance
+    0.25 m, time tolerance 10 s, chosen from dev perception-error statistics. On dev, predicted place poses have
+    median error 0.045 m and max 2.161 m, so some predicted events are wrong by more than the tolerance.
+    Each recording contains one move, so every timeline event is one recording.

@@ -1,6 +1,10 @@
-# Stage B scoring tolerances.
-# status: provisional. Tune on the dev split only, then set frozen: true and record the commit hash.
+# Stage B scoring tolerances, chosen on the dev split only (27 recordings).
+# Basis (dev, gt vs pred events): place-pose error median 0.045 m, p90 0.269 m, max 2.161 m;
+# place-time error max 2.8 s; move displacement median 2.41 m; timeline gaps >= 180 s.
+# Chosen from these perception-error numbers, not from agent accuracy.
+# Sensitivity (0.1 m and 0.5 m) is recomputed from stored answers in the analysis.
+# frozen is set to true only after prompt tuning is done; see frozen_at_commit.
 frozen: false
 frozen_at_commit: null
-position_tolerance_m: 0.5   # placeholder, not yet tuned
-time_tolerance_s: 60.0      # placeholder, not yet tuned
+position_tolerance_m: 0.25
+time_tolerance_s: 10.0
