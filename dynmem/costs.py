@@ -34,7 +34,9 @@ def build(cache_path="cache/llm.sqlite", models_yaml="configs/models.yaml") -> s
             total += cost
         lines.append(f"| {prov} | {model} | {tag} | {fresh} | {cached} | {tin} | {tout} | {secs:.1f} | "
                      f"{'-' if cost is None else f'{cost:.4f}'} |")
-    lines += ["", f"Total priced cost: {total:.4f} USD" + ("" if priced else " (excludes rows without a price)"), ""]
+    lines += ["", "Notes: `ollama` rows are local inference with no API cost. `gemini` rows are 18 probe calls on a free-tier key.",
+              "Counts include dev tuning runs and one discarded partial test run, so they exceed the final result files.", ""]
+    lines += [f"Total priced cost: {total:.4f} USD" + ("" if priced else " (excludes rows without a price)"), ""]
     return "\n".join(lines)
 
 
