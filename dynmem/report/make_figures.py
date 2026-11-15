@@ -185,7 +185,8 @@ def main(argv=None):
     s = summarise(d)
     s.to_csv(f"results/summary_stage_b_{a.split}.csv", index=False)
     cost_table(d).to_csv(f"results/cost_latency_{a.split}.csv", index=False)
-    figures(s, Path("figures"), a.split)
+    from dynmem.report.extra_figures import make_all
+    make_all(d, s, Path("figures"), a.split, a.root)
     tables = [f"# Stage B tables ({a.split})", ""]
     for src in sorted(d.source.unique()):
         tables += [f"## Accuracy by cell and question type, `{src}`", "", accuracy_table(s, src), "",
