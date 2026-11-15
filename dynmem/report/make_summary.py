@@ -281,11 +281,34 @@ API keys are read from environment variables only. The default agent runs locall
 - The agent was not validated against published ReMEmbR results (NaVQA and CODa are not included).
 - No robot hardware is used.
 
-## Data and licenses
+## Resources
 
-| Dataset | Use | License |
-|---|---|---|
-| Lost & Found (Zenodo 14967441, arXiv 2411.19162) | trajectories | CC BY 4.0 |
+**Data**
+
+| Resource | Size | Used for | License |
+|---|---|---|---|
+| [Lost & Found dataset](https://zenodo.org/records/14967441), [`Final_Dataset.zip`](https://zenodo.org/records/14967441/files/Final_Dataset.zip?download=1) | 30.2 GB | object trajectories, ICP transforms | CC BY 4.0 |
+| [Lost & Found scan](https://zenodo.org/records/14967441), [`Final_Scan.zip`](https://zenodo.org/records/14967441/files/Final_Scan.zip?download=1) | 434 MB | scene point cloud, coordinate check | CC BY 4.0 |
+
+`make data` downloads the scan and fetches only the six small files per recording (about 4 MB in total) from the 30 GB archive by HTTP range requests. The raw `.vrs` videos are not needed.
+
+**Papers and code**
+
+- Lost & Found: Tracking Changes from Egocentric Observations in 3D Dynamic Scene Graphs. [arXiv 2411.19162](https://arxiv.org/abs/2411.19162), [code](https://github.com/behretj/LostFound).
+- ReMEmbR: Building and Reasoning Over Long-Horizon Spatio-Temporal Memory for Robot Navigation. [arXiv 2409.13682](https://arxiv.org/abs/2409.13682), [code](https://github.com/NVIDIA-AI-IOT/remembr).
+
+**Models**
+
+| Model | Role |
+|---|---|
+| [`qwen2.5:7b`](https://ollama.com/library/qwen2.5) (Q4_K_M, via Ollama) | agent for all reported results |
+| [`mixedbread-ai/mxbai-embed-large-v1`](https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1) | text embeddings for the memory store |
+| [`qwen3.5:9b`](https://ollama.com/library/qwen3.5) | tried, not used: 14 GB resident on a 24 GB laptop |
+| `gemini-3.5-flash` | tool-calling test only: the free tier allows 5 requests per minute |
+
+**Software**
+
+[Ollama](https://ollama.com) for local inference, [Qdrant](https://qdrant.tech/documentation/) in local mode as the memory store, [sentence-transformers](https://sbert.net) for embeddings, [uv](https://docs.astral.sh/uv/) for the environment.
 
 Code: MIT ([`LICENSE`](LICENSE)). No dataset files are stored in this repository.
 """
