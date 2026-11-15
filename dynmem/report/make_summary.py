@@ -181,6 +181,10 @@ def build_readme(root: str, split: str) -> str:
 
 Dynamic episodic memory for embodied agents: answering where-and-when questions after objects move.
 
+## Summary
+
+This project measures how the long-term memory of an embodied agent should be updated and searched when objects move. It builds a retrieval-augmented memory agent and tests three memory update policies and two retrieval designs on 96 real pick-and-place recordings from the Lost & Found dataset. Without memory the agent answers {m("blind"):.0%} of where-and-when questions. The best memory setting answers {m(best):.0%}. Each simpler policy fails one question class: a static memory cannot say where an object is now ({m("M0_R1", "current_location"):.0%}), and an overwrite memory cannot say where it was before ({m("M1_R1", "previous_location"):.0%}). Hybrid search lifts a versioned memory from {m("M2_R0"):.0%} to {m("M2_R1"):.0%}. Noise from predicted trajectories costs at most {max(gaps) * 100:.0f} percentage points. Work in progress is tracked in the [roadmap](#roadmap).
+
 ## Problem
 
 A robot or a pair of smart glasses can keep a long-term memory of what it saw. A common design captions short video segments, embeds the captions and stores them in a vector database with position and time. An LLM agent then answers questions through retrieval tools. ReMEmbR (arXiv 2409.13682) is a reference system of this kind.
@@ -239,12 +243,20 @@ Reports: [`REPORT.md`](REPORT.md), [`SUMMARY.md`](SUMMARY.md). Deviations from t
 | H3. Hybrid retrieval helps most on temporal questions | Held for versioned memory. Smaller effect for overwrite memory. |
 | H4. Predicted trajectories lower accuracy only slightly | Held. Largest gap {max(gaps) * 100:.0f} percentage points. |
 
-## Next steps
+## Roadmap
 
-- Chain recordings so that each move starts where the previous one ended. "Where was it before?" would then separate the policies.
-- Let the text-only tool accept an object filter, to separate retrieval quality from tool-signature errors.
-- Repeat with a stronger model through a paid API tier.
-- Add the NaVQA validation of the agent.
+- [x] Memory store, retrieval tools, tool-calling agent and deterministic scoring
+- [x] Three memory policies and two retrieval designs on Lost & Found, with ground-truth and predicted events
+- [x] Dev/test split by recording, frozen prompts, confidence intervals and paired tests
+- [x] Figures and tables generated from result files
+- [ ] A history question that only versioned memory can answer ("where was it placed before its latest move?")
+- [ ] Remove the text-tool confound: let text-only search accept an object argument
+- [ ] Repeat the key settings with a stronger model (Gemini)
+- [ ] Chained timelines, so each move starts where the previous one ended
+- [ ] Larger test set: 5 timelines and 150 questions per timeline
+- [ ] Paper-style report (PDF, about 4 pages)
+- [ ] Validate the agent on NaVQA against published ReMEmbR results
+- [ ] Memory budget ablation: limit the number of entries and test an eviction policy
 
 ## Reproduce
 
