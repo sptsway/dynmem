@@ -351,9 +351,60 @@ def fig_tuning(root: str, out: Path) -> None:
     save(fig, out, "09_dev_tuning_effect.png")
 
 
+# 10. Approach overview (schematic, no data)
+def fig_pipeline(out: Path) -> None:
+    fig, ax = plt.subplots(figsize=(14.4, 3.6))
+    ax.set_xlim(0, 14.4); ax.set_ylim(0, 3.6); ax.axis("off"); ax.grid(False)
+    boxes = [("Lost & Found\nrecordings", "96 pick-and-place\nvideos, 9 objects"),
+             ("Move events", "pick / place pose\nand time"),
+             ("Constructed\ntimeline", "one synthetic clock,\n3 to 20 min gaps"),
+             ("Memory policy", "static · overwrite ·\nversioned"),
+             ("Agent + search", "text only or hybrid,\nup to 3 rounds"),
+             ("Scored answer", "checked against\nground truth")]
+    w, gap = 1.95, 0.46
+    for i, (t, sub) in enumerate(boxes):
+        x = 0.15 + i * (w + gap)
+        ax.add_patch(plt.Rectangle((x, 0.9), w, 1.9, fc=SURFACE, ec=INK2, lw=1.6, zorder=2))
+        ax.text(x + w / 2, 2.35, t, ha="center", va="center", fontsize=11.5, fontweight="bold", color=INK)
+        ax.text(x + w / 2, 1.5, sub, ha="center", va="center", fontsize=9.2, color=INK2)
+        if i < len(boxes) - 1:
+            ax.annotate("", xy=(x + w + gap - 0.05, 1.85), xytext=(x + w + 0.05, 1.85),
+                        arrowprops=dict(arrowstyle="-|>", color=INK2, lw=1.6))
+    x4 = 0.15 + 3 * (w + gap)
+    for k, pol in enumerate(("M0", "M1", "M2")):
+        ax.add_patch(plt.Rectangle((x4 + 0.12 + k * 0.6, 0.98), 0.54, 0.16, color=POLICY_COLOR[pol], zorder=3))
+    ax.text(0.15 + 1.5 * (w + gap) - gap / 2, 0.45, "events come from ground-truth trajectories\nor from Lost & Found predictions",
+            ha="center", fontsize=9.5, color=INK2, va="center")
+    ax.set_title("Approach: from recordings to a scored answer", pad=6)
+    save(fig, out, "10_approach_pipeline.png")
+
+
+def now_failure_analysis(d: pd.DataFrame, cell: str = "M2_R1", split: str = "test") -> dict:
+    """Why did a cell fail 'where is it now?' questions? Counts from the stored traces. Writes a CSV."""
+    import re
+    c = {"questions": 0, "failed": 0, "retrieved_right_object_still_wrong": 0, "no_position_given": 0,
+         "retrieved_nothing_about_object": 0}
+    g = d[(d.source == "gt_event") & (d.cell == cell) & (d.qtype == "current_location")]
+    for _, r in g.iterrows():
+        c["questions"] += 1
+        if r["score"] >= 1:
+            continue
+        c["failed"] += 1
+        a = r["answer"] if isinstance(r["answer"], dict) else {}
+        if not a.get("position"):
+            c["no_position_given"] += 1
+            continue
+        obj = re.search(r"the (\w+) now", r["question"]).group(1)
+        seen = any(f"object={obj}" in str(st["result"]) for st in r["steps"])
+        c["retrieved_right_object_still_wrong" if seen else "retrieved_nothing_about_object"] += 1
+    pd.DataFrame([c]).to_csv(f"results/benchmark_now_failures_{cell}_{split}.csv", index=False)
+    return c
+
+
 def make_all(d, s, out: Path, split: str, dev_root: str) -> None:
     style()
     fig_policies(out)
+    fig_pipeline(out)
     for src in sorted(d.source.unique()):
         if src == "gt_event":
             fig_heatmap(s, out, src, split)
@@ -366,3 +417,4 @@ def make_all(d, s, out: Path, split: str, dev_root: str) -> None:
     fig_reliability(d, out, split)
     fig_timelines(d, out, split)
     fig_tuning(dev_root, out)
+    now_failure_analysis(d, "M2_R1", split)
