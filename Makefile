@@ -1,6 +1,6 @@
 PY ?= .venv/bin/python
 
-.PHONY: data captions stage_a stage_b report test costs
+.PHONY: data captions stage_a stage_b report perception test costs
 
 test:
 	$(PY) -m pytest -q
@@ -22,4 +22,8 @@ costs:
 	$(PY) -m dynmem.costs
 
 report:
-	$(PY) -m dynmem.report.make_figures --split test --readme
+	$(PY) -m dynmem.report.make_figures --split test
+	$(PY) -m dynmem.report.make_summary
+
+perception:
+	$(PY) -m dynmem.report.perception

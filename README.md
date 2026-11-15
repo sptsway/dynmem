@@ -2,90 +2,68 @@
 
 Dynamic episodic memory for embodied agents: answering where-and-when questions after objects move.
 
-This is a measurement study. It makes no claim of a new state of the art.
+Which memory update policy keeps an agent's answers correct once objects move, and which retrieval design finds them?
 
-## Question
+## Results
 
-A robot with a long-term memory sees objects move. Which memory update policy keeps the answers correct?
-Which retrieval design finds them?
+- **Memory design decides accuracy.** With no memory the agent answers 1% of questions. The best memory setting answers 56%.
+- **Static memory goes stale.** It answers 0% of "where is it now?" questions. Overwrite memory fixes that (92%) and loses history (0% on "where was it before?").
+- **Hybrid search lifts versioned memory** from 34% to 56% overall, and from 40% to 90% on "what moved in a time window?".
+- **Predicted trajectories cost little.** Scores with Lost & Found predictions stay within 2 percentage points of ground truth. The median placement error on test recordings is 3 cm.
 
-Three memory update policies:
+![The three memory policies](figures/00_memory_policies.png)
 
-- **M0 static**: the initial scan only. Later events are ignored.
-- **M1 overwrite**: one entry per object. A new event replaces it.
-- **M2 versioned**: append-only entries with validity intervals.
+*The three memory policies*
 
-Two retrieval designs:
+![Share of questions answered correctly, by memory setting and question type](figures/01_accuracy_heatmap_test.png)
 
-- **R0 vector-only**: text similarity search.
-- **R1 hybrid**: composed search with time, position and object filters, plus per-object history.
+*Share of questions answered correctly, by memory setting and question type*
 
-A **blind** baseline answers without any memory.
+![Overall accuracy with 95% confidence intervals](figures/02_overall_accuracy_test.png)
 
-## Scope
+*Overall accuracy with 95% confidence intervals*
 
-Only the dynamic-memory study (Stage B) was run. The planned validation on NaVQA and CODa (Stage A) was not run. See `DEVIATIONS.md`.
+![Accuracy gain from hybrid search, per question type](figures/03_hybrid_vs_text_test.png)
 
-## Method
+*Accuracy gain from hybrid search, per question type*
 
-- **Data**: the Lost & Found dataset (96 egocentric pick-and-place recordings, 9 objects, one scene).
-- **Timelines**: each recording is one move. Recordings are placed on a synthetic clock with random gaps of 3 to 20 minutes. Timelines are constructed, not a real continuous log.
-- **Events**: ground truth (`gt_event`) or Lost & Found predictions (`pred_event`). Answers are always scored against ground truth.
-- **Questions**: five templated types. Current location, previous location, time of last move, move count and objects moved in an interval.
-- **Scoring**: deterministic. Position within 0.25 m. Time within 10 s. Count exact. Interval by F1.
-- **Splits**: by recording. 27 dev, 69 test. Prompts and tolerances were tuned on dev and frozen before the test run.
-- **Agent**: tool-calling LLM, at most 3 retrieval rounds, strict JSON answers. A parse failure scores 0.
-- **Memory store**: Qdrant (local mode). Embeddings: `mixedbread-ai/mxbai-embed-large-v1`.
+![Predicted versus ground-truth events, and the tracker's placement error](figures/04_predicted_vs_ground_truth_test.png)
 
-## Benchmarks
+*Predicted versus ground-truth events, and the tracker's placement error*
 
-<!-- BENCH:START -->
-Split: `test`. Model: `qwen2.5:7b` (ollama). Score is accuracy (F1 for interval questions); brackets are 95% bootstrap CIs over questions.
+![Accuracy as the position and time tolerances change](figures/05_tolerance_sensitivity_test.png)
 
-**Event source: `gt_event`**
+*Accuracy as the position and time tolerances change*
 
-| cell | n | overall | overall_ex_prev | current_location | previous_location | when_moved | count | interval |
-|---|---|---|---|---|---|---|---|---|
-| M0_R0 | 180 | 0.20 [0.15, 0.26] | 0.01 [0.00, 0.03] | 0.00 [0.00, 0.00] | 0.97 [0.92, 1.00] | 0.00 [0.00, 0.00] | 0.03 [0.00, 0.08] | 0.01 [0.00, 0.04] |
-| M0_R1 | 180 | 0.16 [0.11, 0.21] | 0.01 [0.00, 0.02] | 0.00 [0.00, 0.00] | 0.75 [0.61, 0.89] | 0.00 [0.00, 0.00] | 0.03 [0.00, 0.08] | 0.00 [0.00, 0.00] |
-| M1_R0 | 180 | 0.51 [0.44, 0.58] | 0.64 [0.57, 0.71] | 0.92 [0.81, 1.00] | 0.00 [0.00, 0.00] | 1.00 [1.00, 1.00] | 0.19 [0.08, 0.33] | 0.45 [0.37, 0.52] |
-| M1_R1 | 180 | 0.55 [0.48, 0.62] | 0.69 [0.62, 0.76] | 0.92 [0.81, 1.00] | 0.00 [0.00, 0.00] | 1.00 [1.00, 1.00] | 0.25 [0.11, 0.39] | 0.60 [0.51, 0.69] |
-| M2_R0 | 180 | 0.34 [0.28, 0.40] | 0.37 [0.30, 0.45] | 0.28 [0.14, 0.42] | 0.19 [0.08, 0.33] | 0.44 [0.28, 0.61] | 0.36 [0.22, 0.53] | 0.40 [0.32, 0.49] |
-| M2_R1 | 180 | 0.56 [0.49, 0.63] | 0.61 [0.53, 0.69] | 0.58 [0.42, 0.75] | 0.36 [0.19, 0.53] | 0.72 [0.58, 0.86] | 0.25 [0.11, 0.39] | 0.90 [0.81, 0.97] |
-| blind | 180 | 0.01 [0.00, 0.02] | 0.01 [0.00, 0.02] | 0.00 [0.00, 0.00] | 0.00 [0.00, 0.00] | 0.00 [0.00, 0.00] | 0.03 [0.00, 0.08] | 0.00 [0.00, 0.00] |
+![Tokens, tool calls and time per question](figures/06_cost_and_latency_test.png)
 
-**Event source: `pred_event`**
+*Tokens, tool calls and time per question*
 
-| cell | n | overall | overall_ex_prev | current_location | previous_location | when_moved | count | interval |
-|---|---|---|---|---|---|---|---|---|
-| M0_R0 | 180 | 0.20 [0.15, 0.26] | 0.01 [0.00, 0.03] | 0.00 [0.00, 0.00] | 0.97 [0.92, 1.00] | 0.00 [0.00, 0.00] | 0.03 [0.00, 0.08] | 0.01 [0.00, 0.04] |
-| M0_R1 | 180 | 0.16 [0.11, 0.21] | 0.01 [0.00, 0.02] | 0.00 [0.00, 0.00] | 0.75 [0.61, 0.89] | 0.00 [0.00, 0.00] | 0.03 [0.00, 0.08] | 0.00 [0.00, 0.00] |
-| M1_R0 | 180 | 0.51 [0.44, 0.57] | 0.63 [0.57, 0.70] | 0.92 [0.81, 1.00] | 0.00 [0.00, 0.00] | 1.00 [1.00, 1.00] | 0.17 [0.06, 0.31] | 0.45 [0.38, 0.52] |
-| M1_R1 | 180 | 0.53 [0.46, 0.60] | 0.67 [0.60, 0.73] | 0.92 [0.81, 1.00] | 0.00 [0.00, 0.00] | 1.00 [1.00, 1.00] | 0.17 [0.06, 0.31] | 0.59 [0.49, 0.68] |
-| M2_R0 | 180 | 0.32 [0.26, 0.38] | 0.36 [0.29, 0.43] | 0.31 [0.17, 0.44] | 0.14 [0.03, 0.25] | 0.39 [0.25, 0.56] | 0.36 [0.22, 0.53] | 0.39 [0.30, 0.49] |
-| M2_R1 | 180 | 0.55 [0.48, 0.62] | 0.61 [0.53, 0.69] | 0.61 [0.44, 0.78] | 0.31 [0.17, 0.47] | 0.81 [0.67, 0.92] | 0.08 [0.00, 0.19] | 0.93 [0.87, 0.99] |
-| blind | 180 | 0.01 [0.00, 0.02] | 0.01 [0.00, 0.02] | 0.00 [0.00, 0.00] | 0.00 [0.00, 0.00] | 0.00 [0.00, 0.00] | 0.03 [0.00, 0.08] | 0.00 [0.00, 0.00] |
+![How often the model produced an invalid answer or a rejected tool call](figures/07_model_reliability_test.png)
 
-`overall_ex_prev` leaves out previous-location questions. In these timelines the previous location is almost always the initial scan pose (see Limitations), so M0 scores high on that type without any history.
+*How often the model produced an invalid answer or a rejected tool call*
 
-**Ground-truth versus predicted events (paired, same questions)**
+![Accuracy on each constructed timeline](figures/08_per_timeline_test.png)
 
-| cell | n | acc gt_event | acc pred_event | diff (pred - gt) | pred only | gt only | McNemar p |
-|---|---|---|---|---|---|---|---|
-| M0_R0 | 180 | 0.20 | 0.20 | +0.00 | 0 | 0 | 1 |
-| M0_R1 | 180 | 0.16 | 0.16 | +0.00 | 0 | 0 | 1 |
-| M1_R0 | 180 | 0.42 | 0.42 | -0.01 | 1 | 2 | 1 |
-| M1_R1 | 180 | 0.48 | 0.47 | -0.02 | 1 | 4 | 0.375 |
-| M2_R0 | 180 | 0.26 | 0.24 | -0.02 | 6 | 9 | 0.607 |
-| M2_R1 | 180 | 0.54 | 0.53 | -0.01 | 10 | 11 | 1 |
-| blind | 180 | 0.01 | 0.01 | +0.00 | 0 | 0 | 1 |
+*Accuracy on each constructed timeline*
 
-<!-- BENCH:END -->
+![Effect of the single dev tuning round](figures/09_dev_tuning_effect.png)
 
-Paired differences use strict correctness (a question counts only at score 1). Cell scores are mean scores.
+*Effect of the single dev tuning round*
 
-Full tables, paired tests, cost and latency, and failure cases: `figures/tables_test.md`. Figures: `figures/`. Reports: `REPORT.md`, `SUMMARY.md`.
-Per-question traces: `results/stage_b_local/test/`.
+
+Tables with confidence intervals and paired tests: [`figures/tables_test.md`](figures/tables_test.md). Every figure is built from the traces in `results/`.
+Reports: [`REPORT.md`](REPORT.md), [`SUMMARY.md`](SUMMARY.md). Deviations from the plan: [`DEVIATIONS.md`](DEVIATIONS.md). Costs: [`COSTS.md`](COSTS.md).
+
+## Setup
+
+- **Data:** Lost & Found, 96 egocentric pick-and-place recordings of 9 objects in one scene. Recordings are placed on constructed timelines with random 3 to 20 minute gaps.
+- **Memory policies:** static (initial scan), overwrite (latest pose), versioned (append-only with validity intervals).
+- **Retrieval:** text search only, or hybrid (time, position and object filters, per-object history).
+- **Questions:** five templated types, scored deterministically. Position within 0.25 m, time within 10 s, count exact, interval by F1.
+- **Agent:** `qwen2.5:7b` with tool calling, at most 3 retrieval rounds, strict JSON answers.
+- **Splits:** by recording. 27 dev, 69 test. Prompts and tolerances were tuned on dev and frozen before the test run.
+- **Test set:** 3 timelines, 180 questions per setting, ground-truth and predicted events.
 
 ## Reproduce
 
@@ -94,27 +72,25 @@ uv venv --python 3.11 .venv && uv pip install -e ".[dev]"
 make test      # unit tests
 make data      # scan archive and per-recording files (about 440 MB transferred)
 make stage_b   # needs a running Ollama server with qwen2.5:7b
-make report    # tables, figures, README benchmarks
+make report    # figures, tables, README, SUMMARY, REPORT
 ```
 
 API keys are read from environment variables only. The default agent runs locally.
 
 ## Limitations
 
-- Timelines are constructed. They are not a continuous real-world log.
+- Timelines are constructed from independent recordings. They are not a continuous real-world log.
 - One scene, nine objects, three timelines.
-- Every recording of an object starts from nearly the same pose. The previous location is therefore usually the initial scan pose. Previous-location questions do not separate M0 from the other policies, so `overall_ex_prev` is reported.
-- The agent is a local 7B model. Absolute accuracy is lower than for frontier models.
-- Position and time tolerances were chosen on the dev split.
-- Test size was cut to 60 questions per timeline.
-- Stage A was not run, so the agent is not validated against published ReMEmbR results.
+- Each object starts every recording from nearly the same pose, so the previous location is usually the initial scan pose. "Where was it before?" does not separate static memory from the others, and the figures also show scores without it.
+- The agent is a local 7B model. Frontier models would score higher in absolute terms.
+- Position and time tolerances were chosen on the dev split. Figure 05 shows how scores change with them.
+- The agent was not validated against published ReMEmbR results (NaVQA and CODa are not included).
 - No robot hardware is used.
 
 ## Data and licenses
 
 | Dataset | Use | License |
 |---|---|---|
-| Lost & Found (Zenodo 14967441, arXiv 2411.19162) | Stage B trajectories | CC BY 4.0 |
-| NaVQA / ReMEmbR (arXiv 2409.13682), CODa | cited as background, not used | NVIDIA non-commercial; CODa non-commercial |
+| Lost & Found (Zenodo 14967441, arXiv 2411.19162) | trajectories | CC BY 4.0 |
 
-Code: MIT (`LICENSE`). No dataset files are stored in this repository.
+Code: MIT ([`LICENSE`](LICENSE)). No dataset files are stored in this repository.

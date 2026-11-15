@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from dynmem.report.extra_figures import reliability_table
 from dynmem.report.make_figures import load, summarise
 from dynmem.stats import mcnemar
 
@@ -54,6 +55,8 @@ def build(root: str, split: str) -> tuple[str, str]:
         min_p = min(min_p, mcnemar(a.loc[ids].to_numpy(), b.loc[ids].to_numpy())["p_value"])
     sig = "No cell differs significantly in a paired test" if min_p >= 0.05 else "At least one cell differs significantly in a paired test"
     parse = d.groupby("cell")["parsed"].mean()
+    rel = reliability_table(d)
+    rel_err = float(rel[(rel.source == g) & (rel.cell == "M1_R0")]["tool_error"].iloc[0])
     tl = sorted(d["timeline"].unique())
 
     summary = f"""# Summary
@@ -77,7 +80,7 @@ The memory-less baseline scores {f(g, "blind")} overall. Parse failures count as
 ## Problem
 An agent with a long-term memory sees objects move. A static memory goes stale. This study measures how
 three memory update policies and two retrieval designs change the accuracy of where-and-when questions
-after objects move. It is a measurement study. It makes no claim of a new state of the art.
+after objects move.
 
 ## Method
 **Data.** The Lost & Found dataset: 96 egocentric pick-and-place recordings of 9 objects in one scene.
@@ -133,6 +136,9 @@ Paired differences and p-values use strict correctness (score 1); cell scores ar
   that one move ends where the next begins would remove this.
 - The agent is a local 7B model. Absolute accuracy is lower than for frontier models. It often returned the
   current position for previous-location questions and struggled with counts.
+- In the text-only design the model often passed an `object` filter that `search_text` does not accept
+  ({rel_err:.0%} of Overwrite · text questions). The tool returned an error and the model retried. This may
+  understate text-only accuracy and so part of the hybrid gain.
 - Position and time tolerances were chosen on the dev split.
 - Stage A (validation on NaVQA) was not run: it needs hundreds of GB of CODa video and a vision captioner.
 - Test size was cut from 150 to 60 questions per timeline (see `DEVIATIONS.md`).
@@ -145,6 +151,91 @@ ReMEmbR (arXiv 2409.13682) and CODa are cited as background; neither dataset was
     return summary, report
 
 
+def build_readme(root: str, split: str) -> str:
+    d = load(split, root)
+    s = summarise(d)
+    g = "gt_event"
+
+    def m(cell, qt="overall", src=g):
+        r = s[(s.source == src) & (s.cell == cell) & (s.qtype == qt)].iloc[0]
+        return r["mean"]
+
+    best = max(("M0_R0", "M0_R1", "M1_R0", "M1_R1", "M2_R0", "M2_R1"), key=lambda c: m(c))
+    gaps = [abs(m(c, src="pred_event") - m(c)) for c in ("M0_R0", "M0_R1", "M1_R0", "M1_R1", "M2_R0", "M2_R1")]
+    per = pd.read_csv("results/perception_error.csv") if Path("results/perception_error.csv").exists() else None
+    med = f"{per[per.split == 'test'].place_error_m.median() * 100:.0f} cm" if per is not None else "n/a"
+    n_q = int(s[(s.source == g) & (s.cell == "M2_R1") & (s.qtype == "overall")]["n"].iloc[0])
+    model = d["model"].iloc[0]
+    fig = lambda name, cap: f"![{cap}](figures/{name})\n\n*{cap}*\n"
+    return f"""# DynMem
+
+Dynamic episodic memory for embodied agents: answering where-and-when questions after objects move.
+
+Which memory update policy keeps an agent's answers correct once objects move, and which retrieval design finds them?
+
+## Results
+
+- **Memory design decides accuracy.** With no memory the agent answers {m("blind"):.0%} of questions. The best memory setting answers {m(best):.0%}.
+- **Static memory goes stale.** It answers {m("M0_R1", "current_location"):.0%} of "where is it now?" questions. Overwrite memory fixes that ({m("M1_R1", "current_location"):.0%}) and loses history ({m("M1_R1", "previous_location"):.0%} on "where was it before?").
+- **Hybrid search lifts versioned memory** from {m("M2_R0"):.0%} to {m("M2_R1"):.0%} overall, and from {m("M2_R0", "interval"):.0%} to {m("M2_R1", "interval"):.0%} on "what moved in a time window?".
+- **Predicted trajectories cost little.** Scores with Lost & Found predictions stay within {max(gaps) * 100:.0f} percentage points of ground truth. The median placement error on test recordings is {med}.
+
+{fig("00_memory_policies.png", "The three memory policies")}
+{fig(f"01_accuracy_heatmap_{split}.png", "Share of questions answered correctly, by memory setting and question type")}
+{fig(f"02_overall_accuracy_{split}.png", "Overall accuracy with 95% confidence intervals")}
+{fig(f"03_hybrid_vs_text_{split}.png", "Accuracy gain from hybrid search, per question type")}
+{fig(f"04_predicted_vs_ground_truth_{split}.png", "Predicted versus ground-truth events, and the tracker's placement error")}
+{fig(f"05_tolerance_sensitivity_{split}.png", "Accuracy as the position and time tolerances change")}
+{fig(f"06_cost_and_latency_{split}.png", "Tokens, tool calls and time per question")}
+{fig(f"07_model_reliability_{split}.png", "How often the model produced an invalid answer or a rejected tool call")}
+{fig(f"08_per_timeline_{split}.png", "Accuracy on each constructed timeline")}
+{fig("09_dev_tuning_effect.png", "Effect of the single dev tuning round")}
+
+Tables with confidence intervals and paired tests: [`figures/tables_{split}.md`](figures/tables_{split}.md). Every figure is built from the traces in `results/`.
+Reports: [`REPORT.md`](REPORT.md), [`SUMMARY.md`](SUMMARY.md). Deviations from the plan: [`DEVIATIONS.md`](DEVIATIONS.md). Costs: [`COSTS.md`](COSTS.md).
+
+## Setup
+
+- **Data:** Lost & Found, 96 egocentric pick-and-place recordings of 9 objects in one scene. Recordings are placed on constructed timelines with random 3 to 20 minute gaps.
+- **Memory policies:** static (initial scan), overwrite (latest pose), versioned (append-only with validity intervals).
+- **Retrieval:** text search only, or hybrid (time, position and object filters, per-object history).
+- **Questions:** five templated types, scored deterministically. Position within 0.25 m, time within 10 s, count exact, interval by F1.
+- **Agent:** `{model}` with tool calling, at most 3 retrieval rounds, strict JSON answers.
+- **Splits:** by recording. 27 dev, 69 test. Prompts and tolerances were tuned on dev and frozen before the test run.
+- **Test set:** 3 timelines, {n_q} questions per setting, ground-truth and predicted events.
+
+## Reproduce
+
+```
+uv venv --python 3.11 .venv && uv pip install -e ".[dev]"
+make test      # unit tests
+make data      # scan archive and per-recording files (about 440 MB transferred)
+make stage_b   # needs a running Ollama server with qwen2.5:7b
+make report    # figures, tables, README, SUMMARY, REPORT
+```
+
+API keys are read from environment variables only. The default agent runs locally.
+
+## Limitations
+
+- Timelines are constructed from independent recordings. They are not a continuous real-world log.
+- One scene, nine objects, three timelines.
+- Each object starts every recording from nearly the same pose, so the previous location is usually the initial scan pose. "Where was it before?" does not separate static memory from the others, and the figures also show scores without it.
+- The agent is a local 7B model. Frontier models would score higher in absolute terms.
+- Position and time tolerances were chosen on the dev split. Figure 05 shows how scores change with them.
+- The agent was not validated against published ReMEmbR results (NaVQA and CODa are not included).
+- No robot hardware is used.
+
+## Data and licenses
+
+| Dataset | Use | License |
+|---|---|---|
+| Lost & Found (Zenodo 14967441, arXiv 2411.19162) | trajectories | CC BY 4.0 |
+
+Code: MIT ([`LICENSE`](LICENSE)). No dataset files are stored in this repository.
+"""
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default="results/stage_b_local")
@@ -153,7 +244,8 @@ def main(argv=None):
     summary, report = build(a.root, a.split)
     Path("SUMMARY.md").write_text(summary)
     Path("REPORT.md").write_text(report)
-    print("wrote SUMMARY.md, REPORT.md")
+    Path("README.md").write_text(build_readme(a.root, a.split))
+    print("wrote SUMMARY.md, REPORT.md, README.md")
 
 
 if __name__ == "__main__":

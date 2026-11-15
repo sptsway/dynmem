@@ -3,7 +3,7 @@
 ## Problem
 An agent with a long-term memory sees objects move. A static memory goes stale. This study measures how
 three memory update policies and two retrieval designs change the accuracy of where-and-when questions
-after objects move. It is a measurement study. It makes no claim of a new state of the art.
+after objects move.
 
 ## Method
 **Data.** The Lost & Found dataset: 96 egocentric pick-and-place recordings of 9 objects in one scene.
@@ -65,6 +65,9 @@ Paired differences and p-values use strict correctness (score 1); cell scores ar
   that one move ends where the next begins would remove this.
 - The agent is a local 7B model. Absolute accuracy is lower than for frontier models. It often returned the
   current position for previous-location questions and struggled with counts.
+- In the text-only design the model often passed an `object` filter that `search_text` does not accept
+  (11% of Overwrite · text questions). The tool returned an error and the model retried. This may
+  understate text-only accuracy and so part of the hybrid gain.
 - Position and time tolerances were chosen on the dev split.
 - Stage A (validation on NaVQA) was not run: it needs hundreds of GB of CODa video and a vision captioner.
 - Test size was cut from 150 to 60 questions per timeline (see `DEVIATIONS.md`).
