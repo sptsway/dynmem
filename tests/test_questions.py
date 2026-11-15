@@ -43,8 +43,23 @@ def timeline():
 
 def test_generation_is_deterministic_and_well_formed():
     tl = timeline()
+    from dynmem.stage_b.questions import CORE_QTYPES
     a, b = generate_questions(tl, 10, seed=0), generate_questions(tl, 10, seed=0)
-    assert a == b and len(a) == 50
-    assert len({q.id for q in a}) == 50
+    assert a == b
+    core = [q for q in a if q.qtype in CORE_QTYPES]
+    assert len(core) == 50 and len({q.id for q in a}) == len(a)
     assert all(q.text.startswith("It is now t=") for q in a)
-    assert {q.qtype for q in a} == {"current_location", "previous_location", "when_moved", "count", "interval"}
+    assert {q.qtype for q in a} <= set(CORE_QTYPES) | {"previous_place"}
+
+
+def test_previous_place_needs_two_moves_and_uses_the_earlier_place():
+    assert answer_for(EV, "previous_place", "mug", 200) is None           # one move so far
+    assert answer_for(EV, "previous_place", "mug", 400) == {"position": [1, 0, 0]}  # placed at B before moving to C
+
+
+def test_adding_the_new_type_leaves_earlier_questions_unchanged():
+    from dynmem.stage_b.questions import CORE_QTYPES
+    tl = timeline()
+    core_only = generate_questions(tl, 10, seed=0, qtypes=CORE_QTYPES)
+    with_new = generate_questions(tl, 10, seed=0, n_override={"previous_place": 5})
+    assert [q for q in with_new if q.qtype in CORE_QTYPES] == core_only

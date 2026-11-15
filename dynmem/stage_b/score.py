@@ -7,7 +7,7 @@ from typing import Sequence
 
 import yaml
 
-QTYPES = ("current_location", "previous_location", "when_moved", "count", "interval")
+QTYPES = ("current_location", "previous_location", "when_moved", "count", "interval", "previous_place")
 
 
 def load_scoring(path: str | Path = "configs/scoring.yaml") -> dict:
@@ -43,7 +43,7 @@ def score_answer(qtype: str, answer: dict | None, gt: dict, cfg: dict) -> float:
     """Score in [0, 1]. A missing answer (parse failure) scores 0."""
     if answer is None:
         return 0.0
-    if qtype in ("current_location", "previous_location"):
+    if qtype in ("current_location", "previous_location", "previous_place"):
         return float(position_correct(answer.get("position"), gt["position"], cfg["position_tolerance_m"]))
     if qtype == "when_moved":
         return float(time_correct(answer.get("time"), gt["time"], cfg["time_tolerance_s"]))

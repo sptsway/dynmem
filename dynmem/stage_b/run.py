@@ -60,6 +60,7 @@ def main(argv=None):
     ap.add_argument("--designs", nargs="+", default=list(DESIGNS))
     ap.add_argument("--blind", action="store_true", help="also run the no-memory baseline")
     ap.add_argument("--qtypes", nargs="+", default=None)
+    ap.add_argument("--n-override", nargs="*", default=[], help="per-type counts, e.g. previous_place=30")
     ap.add_argument("--limit", type=int, default=None, help="questions per timeline (smoke tests)")
     ap.add_argument("--agent", default="agent", help="key in configs/models.yaml: agent or local_baseline")
     ap.add_argument("--workers", type=int, default=1, help="questions in flight (API backends)")
@@ -98,8 +99,11 @@ def main(argv=None):
     cells = [(p, d) for p in a.policies for d in a.designs]
     for seed in a.timelines:
         tl = build_timeline(gt_recs, seed)
-        kw = {"qtypes": tuple(a.qtypes)} if a.qtypes else {}
-        qs = generate_questions(tl, a.n_per_type, seed=0, **kw)
+        # Always generate every type, then filter, so a question's id and content never depend on --qtypes.
+        overrides = dict(x.split("=") for x in a.n_override)
+        qs = generate_questions(tl, a.n_per_type, seed=0, n_override={k: int(v) for k, v in overrides.items()})
+        if a.qtypes:
+            qs = [q for q in qs if q.qtype in a.qtypes]
         if a.limit:
             # keep a balanced subset: round-robin over question types
             by = {}

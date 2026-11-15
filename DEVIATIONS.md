@@ -82,3 +82,9 @@ Each entry: what the plan said, what was found, what was done.
     180 questions per cell, 2,520 runs. Timelines are kept at 3 (the must-have core). The largest single prompt
     was 2,380 tokens, below `num_ctx` 5120, so no prompt was truncated. A first partial run with 150 questions
     per timeline (244 results) was discarded to keep one question set.
+22. **New question type `previous_place` (roadmap item, added after the first test run).** "Where was the X placed
+    before its latest move?" The answer is the place pose of the previous move. In the constructed timelines only
+    0 to 3 of 30 such questions per timeline can be answered from the initial scan, against about 90% for
+    `previous_location`. It tests H2 properly. The agent, prompts, tools and tolerances are unchanged and stay
+    frozen. The type is generated after the original five, so their questions and results are identical. It is
+    reported separately from the original overall score. Sanity run on dev first, then one test run.

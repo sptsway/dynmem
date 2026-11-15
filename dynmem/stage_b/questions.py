@@ -6,6 +6,8 @@ Answer definitions (query time T, object o, moves = events of o with t_place <= 
   when_moved       : t_place of the latest move (needs >= 1 move).
   count            : number of moves.
   interval         : objects with a move whose t_place lies in (t1, t2].
+  previous_place   : p_place of the move before the latest one (needs >= 2 moves). Only a memory that
+                     keeps history can answer it: place poses differ across recordings, unlike pick poses.
 """
 from __future__ import annotations
 
@@ -23,7 +25,10 @@ TEMPLATES = {
     "when_moved": "It is now t={t:.0f} s. When was the {obj} last moved?",
     "count": "It is now t={t:.0f} s. How many times has the {obj} been moved so far?",
     "interval": "It is now t={t:.0f} s. Which objects were moved between t={t1:.0f} s and t={t2:.0f} s?",
+    # Added after the first test run. It is last, so the questions of the types above are unchanged.
+    "previous_place": "It is now t={t:.0f} s. Where was the {obj} placed before its latest move?",
 }
+CORE_QTYPES = ("current_location", "previous_location", "when_moved", "count", "interval")
 
 
 @dataclass(frozen=True)
@@ -73,11 +78,13 @@ def answer_for(events: list[Event], qtype: str, obj: str | None, t: float, t1=No
         return {"position": list(moves[-1].p_pick)}
     if qtype == "when_moved":
         return {"time": moves[-1].t_place}
+    if qtype == "previous_place":
+        return {"position": list(moves[-2].p_place)} if len(moves) >= 2 else None
     raise ValueError(qtype)
 
 
 def generate_questions(tl: Timeline, n_per_type: int = 36, seed: int = 0,
-                       qtypes=tuple(TEMPLATES)) -> list[Question]:
+                       qtypes=tuple(TEMPLATES), n_override: dict | None = None) -> list[Question]:
     events = list(tl.events)
     if not events:
         return []
@@ -86,8 +93,9 @@ def generate_questions(tl: Timeline, n_per_type: int = 36, seed: int = 0,
     t_lo, t_hi = events[0].t_place, tl.t_end
     out: list[Question] = []
     for qtype in qtypes:
+        n = (n_override or {}).get(qtype, n_per_type)
         made, tries = 0, 0
-        while made < n_per_type and tries < n_per_type * 50:
+        while made < n and tries < n * 50:
             tries += 1
             t = float(rng.uniform(t_lo, t_hi))
             obj = None if qtype == "interval" else str(rng.choice(objects))
