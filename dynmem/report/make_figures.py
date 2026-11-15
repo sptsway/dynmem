@@ -33,7 +33,8 @@ def load(split: str, root="results/stage_b") -> pd.DataFrame:
 def summarise(d: pd.DataFrame) -> pd.DataFrame:
     out = []
     for (src, cell), g in d.groupby(["source", "cell"]):
-        for qt, gg in [("overall", g)] + list(g.groupby("qtype")):
+        ex = g[g.qtype != "previous_location"]
+        for qt, gg in [("overall", g), ("overall_ex_prev", ex)] + list(g.groupby("qtype")):
             m, lo, hi = bootstrap_ci(gg["score"].to_numpy())
             out.append({"source": src, "cell": cell, "qtype": qt, "n": len(gg), "mean": m, "ci_lo": lo, "ci_hi": hi})
     return pd.DataFrame(out)
@@ -45,7 +46,7 @@ def fmt(r) -> str:
 
 def accuracy_table(s: pd.DataFrame, source: str) -> str:
     t = s[s.source == source]
-    cols = ["overall"] + QTYPES
+    cols = ["overall", "overall_ex_prev"] + QTYPES
     lines = [f"| cell | n | " + " | ".join(cols) + " |", "|---|---|" + "---|" * len(cols)]
     for cell in CELL_ORDER:
         g = t[t.cell == cell].set_index("qtype")
@@ -68,7 +69,23 @@ def paired_table(d: pd.DataFrame, source: str) -> str:
     return "\n".join(lines)
 
 
+def source_table(d: pd.DataFrame) -> str:
+    lines = ["| cell | n | acc gt_event | acc pred_event | diff (pred - gt) | pred only | gt only | McNemar p |",
+             "|---|---|---|---|---|---|---|---|"]
+    for cell in CELL_ORDER:
+        g = d[(d.cell == cell) & (d.source == "gt_event")].set_index("qid")
+        p = d[(d.cell == cell) & (d.source == "pred_event")].set_index("qid")
+        ids = g.index.intersection(p.index)
+        if len(ids) == 0:
+            continue
+        r = mcnemar(p.loc[ids, "correct"].to_numpy(), g.loc[ids, "correct"].to_numpy())
+        lines.append(f"| {cell} | {len(ids)} | {g.loc[ids, 'correct'].mean():.2f} | {p.loc[ids, 'correct'].mean():.2f} | "
+                     f"{r['acc_diff']:+.2f} | {r['n_a_only']} | {r['n_b_only']} | {r['p_value']:.3g} |")
+    return "\n".join(lines)
+
+
 def cost_table(d: pd.DataFrame) -> pd.DataFrame:
+    d = d[d.source == "gt_event"]  # pred_event rows for M0 and blind are cache hits (wall time about 0)
     g = d.groupby(["source", "cell"]).agg(
         n=("qid", "size"), tool_calls=("n_tool_calls", "mean"), input_tokens=("input_tokens", "mean"),
         output_tokens=("output_tokens", "mean"), retrieval_ms=("retrieval_s", lambda x: 1000 * x.mean()),
@@ -104,7 +121,7 @@ def figures(s: pd.DataFrame, outdir: Path, split: str) -> None:
 
     outdir.mkdir(exist_ok=True)
     sources = sorted(s.source.unique())
-    cols = QTYPES + ["overall"]
+    cols = QTYPES + ["overall", "overall_ex_prev"]
     fig, axes = plt.subplots(1, len(sources), figsize=(6.2 * len(sources), 3.6), squeeze=False)
     for ax, src in zip(axes[0], sources):
         t = s[s.source == src]
@@ -141,6 +158,10 @@ def bench_block(d: pd.DataFrame, s: pd.DataFrame, split: str) -> str:
              "brackets are 95% bootstrap CIs over questions.", ""]
     for src in sorted(d.source.unique()):
         parts += [f"**Event source: `{src}`**", "", accuracy_table(s, src), ""]
+    parts += ["`overall_ex_prev` leaves out previous-location questions. In these timelines the previous location is "
+              "almost always the initial scan pose (see Limitations), so M0 scores high on that type without any history.", ""]
+    if len(d.source.unique()) > 1:
+        parts += ["**Ground-truth versus predicted events (paired, same questions)**", "", source_table(d), ""]
     return "\n".join(parts)
 
 
@@ -169,8 +190,12 @@ def main(argv=None):
     for src in sorted(d.source.unique()):
         tables += [f"## Accuracy by cell and question type, `{src}`", "", accuracy_table(s, src), "",
                    f"## Paired comparisons, `{src}`", "", paired_table(d, src), ""]
+    if len(d.source.unique()) > 1:
+        tables += ["## Ground-truth versus predicted events (RQ3), paired on the same questions", "", source_table(d), ""]
     tables += ["## Cost and latency (mean per question)", "",
-               "Retrieval latency covers the memory store and tools only. End-to-end time is dominated by the model.", "",
+               "Retrieval latency covers the memory store and tools only. End-to-end time is dominated by the model. "
+               "Only `gt_event` rows are shown: M0 and blind produce the same prompts for both sources, so their "
+               "`pred_event` runs were cache hits.", "",
                md(cost_table(d)), "", "## Failures (up to 5 per cell)", "", failure_table(d)]
     Path(f"figures/tables_{a.split}.md").write_text("\n".join(tables))
     if a.readme:
