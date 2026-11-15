@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from dynmem.report.extra_figures import now_failure_analysis, reliability_table
+from dynmem.report.extra_figures import history_summary, now_failure_analysis, reliability_table
 from dynmem.report.make_figures import load, summarise
 from dynmem.stats import mcnemar
 
@@ -177,6 +177,44 @@ def build_readme(root: str, split: str) -> str:
     r_h, _ = pair_readme(d, g, "M2_R1", "M2_R0")
     r_21, _ = pair_readme(d, g, "M2_R1", "M1_R1")
     nf = now_failure_analysis(d, "M2_R1", split)
+    d_all = load(split, root, core_only=False)
+    h = history_summary(d_all)
+    hb = hf = hc = ""
+    h2 = "The first two held. Versioned answered both only in part with this model."
+    pp_box = "[ ]"
+    if not h.empty and set(h.cell) >= {"M0_R0", "M1_R0", "M2_R0", "M2_R1"}:
+        hv = lambda c: float(h[(h.source == g) & (h.cell == c)]["mean"].iloc[0])
+        hd = d_all[d_all.qtype == "previous_place"]
+        def hp(a, b):
+            t_ = hd[hd.source == g]
+            x, y = t_[t_.cell == a].set_index("qid"), t_[t_.cell == b].set_index("qid")
+            ids = x.index.intersection(y.index)
+            return mcnemar(x.loc[ids, "correct"].to_numpy(), y.loc[ids, "correct"].to_numpy())
+        nh = int(h[(h.source == g) & (h.cell == "M2_R0")]["n"].iloc[0])
+        m2_best = max(("M2_R0", "M2_R1"), key=hv)
+        m01 = max(hv(c) for c in ("M0_R0", "M0_R1", "M1_R0", "M1_R1"))
+        r_vs = hp(m2_best, "M1_R0" if m2_best.endswith("R0") else "M1_R1")
+        r_tool = hp("M2_R1", "M2_R0")
+        hb = (f"- **Only versioned memory answers the history question.** On \"where was it placed before its latest move?\" "
+              f"versioned memory answers {hv('M2_R0'):.0%} with text search and {hv('M2_R1'):.0%} with hybrid search. "
+              f"Static and overwrite memory answer at most {m01:.0%}.\n")
+        hf = fig(f"11_history_question_{split}.png", "The history question: where was the object placed before its latest move?")
+        if r_tool["p_value"] >= 0.05:
+            tool_txt = "Hybrid search did not help on this question"
+        else:
+            tool_txt = "Hybrid search lowered accuracy on this question" if hv("M2_R1") < hv("M2_R0") else "Hybrid search raised accuracy on this question"
+        co_path = Path(f"results/history_coincidence_{split}.csv")
+        co_txt = ""
+        if co_path.exists():
+            co = pd.read_csv(co_path).iloc[0]
+            co_txt = (f" Overwrite memory gets {int(co['overwrite_correct_by_coincidence'])} of its {int(co['overwrite_correct'])} correct answers "
+                      f"only where the object was placed twice at the same spot.")
+        hc = (f"- **Keeping history pays off on the question that needs it.** Versioned memory answers {hv(m2_best):.0%} "
+              f"against at most {m01:.0%} for the other policies (paired p = {r_vs['p_value']:.2g}, {nh} questions). "
+              f"{tool_txt} ({hv('M2_R1'):.0%} hybrid against {hv('M2_R0'):.0%} text, paired p = {r_tool['p_value']:.2g}).{co_txt}\n")
+        h2 = (f"The first two held. On the history question versioned memory answers {hv(m2_best):.0%} "
+              f"against at most {m01:.0%} for the other policies.")
+        pp_box = "[x]"
     return f"""# DynMem
 
 Dynamic episodic memory for embodied agents: answering where-and-when questions after objects move.
@@ -214,7 +252,7 @@ This study asks three questions:
 - **Static memory goes stale.** It answers {m("M0_R1", "current_location"):.0%} of "where is it now?" questions. Overwrite memory fixes that ({m("M1_R1", "current_location"):.0%}) and loses history ({m("M1_R1", "previous_location"):.0%} on "where was it before?").
 - **Hybrid search lifts versioned memory** from {m("M2_R0"):.0%} to {m("M2_R1"):.0%} overall, and from {m("M2_R0", "interval"):.0%} to {m("M2_R1", "interval"):.0%} on "what moved in a time window?".
 - **Predicted trajectories cost little.** Scores with Lost & Found predictions stay within {max(gaps) * 100:.0f} percentage points of ground truth. The median placement error on test recordings is {med}.
-
+{hb}
 {fig("00_memory_policies.png", "The three memory policies")}
 {fig(f"01_accuracy_heatmap_{split}.png", "Share of questions answered correctly, by memory setting and question type")}
 {fig(f"02_overall_accuracy_{split}.png", "Overall accuracy with 95% confidence intervals")}
@@ -225,7 +263,7 @@ This study asks three questions:
 {fig(f"07_model_reliability_{split}.png", "How often the model produced an invalid answer or a rejected tool call")}
 {fig(f"08_per_timeline_{split}.png", "Accuracy on each constructed timeline")}
 {fig("09_dev_tuning_effect.png", "Effect of the single dev tuning round")}
-
+{hf}
 Tables with confidence intervals and paired tests: [`figures/tables_{split}.md`](figures/tables_{split}.md). Every figure is built from the traces in `results/`.
 Reports: [`REPORT.md`](REPORT.md), [`SUMMARY.md`](SUMMARY.md). Deviations from the plan: [`DEVIATIONS.md`](DEVIATIONS.md). Costs: [`COSTS.md`](COSTS.md).
 
@@ -234,12 +272,12 @@ Reports: [`REPORT.md`](REPORT.md), [`SUMMARY.md`](SUMMARY.md). Deviations from t
 - **History is needed, and each simpler policy fails one question class.** Static memory cannot answer "now" ({m("M0_R1", "current_location"):.0%}). Overwrite memory cannot answer "before" ({m("M1_R1", "previous_location"):.0%}).
 - **Hybrid retrieval matters most when memory holds many versions.** For versioned memory the paired gain is {r_h["acc_diff"]:+.2f} (McNemar p = {r_h["p_value"]:.2g}). For overwrite memory it is smaller.
 - **Versioned and overwrite memory are level overall with this model.** {m("M2_R1"):.0%} against {m("M1_R1"):.0%} (paired p = {r_21["p_value"]:.2g}). Versioned memory is stronger on time-window questions ({m("M2_R1", "interval"):.0%} against {m("M1_R1", "interval"):.0%}). It is weaker on "where is it now?" ({m("M2_R1", "current_location"):.0%} against {m("M1_R1", "current_location"):.0%}). In {nf["retrieved_right_object_still_wrong"]} of its {nf["failed"]} failures on that question the model had retrieved entries of the right object and still gave a wrong position. In {nf["no_position_given"]} it gave no position.
-- **Perception noise is not the bottleneck here.** Median placement error is {med}, well inside the 0.25 m tolerance. A tolerance sweep (figure 05) shows the same picture at other tolerances.
+{hc}- **Perception noise is not the bottleneck here.** Median placement error is {med}, well inside the 0.25 m tolerance. A tolerance sweep (figure 05) shows the same picture at other tolerances.
 
 | Hypothesis | Outcome |
 |---|---|
 | H1. A rebuilt ReMEmbR-style agent matches published correctness | Not tested. The NaVQA validation was not run. |
-| H2. Static fails "now", overwrite fails "before", versioned answers both | The first two held. Versioned answered both only in part with this model. |
+| H2. Static fails "now", overwrite fails "before", versioned answers both | {h2} |
 | H3. Hybrid retrieval helps most on temporal questions | Held for versioned memory. Smaller effect for overwrite memory. |
 | H4. Predicted trajectories lower accuracy only slightly | Held. Largest gap {max(gaps) * 100:.0f} percentage points. |
 
@@ -249,7 +287,7 @@ Reports: [`REPORT.md`](REPORT.md), [`SUMMARY.md`](SUMMARY.md). Deviations from t
 - [x] Three memory policies and two retrieval designs on Lost & Found, with ground-truth and predicted events
 - [x] Dev/test split by recording, frozen prompts, confidence intervals and paired tests
 - [x] Figures and tables generated from result files
-- [ ] A history question that only versioned memory can answer ("where was it placed before its latest move?")
+- {pp_box} A history question that only versioned memory can answer ("where was it placed before its latest move?")
 - [ ] Remove the text-tool confound: let text-only search accept an object argument
 - [ ] Repeat the key settings with a stronger model (Gemini)
 - [ ] Chained timelines, so each move starts where the previous one ended

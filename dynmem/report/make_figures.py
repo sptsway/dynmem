@@ -21,12 +21,16 @@ PAIRS = [("M2_R1", "M1_R1"), ("M2_R1", "M0_R1"), ("M2_R1", "M2_R0"), ("M1_R1", "
 README_START, README_END = "<!-- BENCH:START -->", "<!-- BENCH:END -->"
 
 
-def load(split: str, root="results/stage_b") -> pd.DataFrame:
+def load(split: str, root="results/stage_b", core_only: bool = True) -> pd.DataFrame:
+    """Per-question rows. By default only the five original question types, so published numbers stay fixed."""
     rows = [json.loads(l) for f in sorted(Path(root, split).glob("*.jsonl")) for l in f.read_text().splitlines() if l.strip()]
     if not rows:
         raise SystemExit(f"no results under {root}/{split}")
     d = pd.DataFrame(rows)
     d["correct"] = d["score"] >= 1.0  # binary view; interval questions need F1 = 1
+    if core_only:
+        from dynmem.stage_b.questions import CORE_QTYPES
+        d = d[d.qtype.isin(CORE_QTYPES)].copy()
     return d
 
 
@@ -186,7 +190,7 @@ def main(argv=None):
     s.to_csv(f"results/summary_stage_b_{a.split}.csv", index=False)
     cost_table(d).to_csv(f"results/cost_latency_{a.split}.csv", index=False)
     from dynmem.report.extra_figures import make_all
-    make_all(d, s, Path("figures"), a.split, a.root)
+    make_all(d, s, Path("figures"), a.split, a.root, d_all=load(a.split, a.root, core_only=False))
     tables = [f"# Stage B tables ({a.split})", ""]
     for src in sorted(d.source.unique()):
         tables += [f"## Accuracy by cell and question type, `{src}`", "", accuracy_table(s, src), "",

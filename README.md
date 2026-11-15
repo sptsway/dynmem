@@ -38,6 +38,7 @@ This study asks three questions:
 - **Static memory goes stale.** It answers 0% of "where is it now?" questions. Overwrite memory fixes that (92%) and loses history (0% on "where was it before?").
 - **Hybrid search lifts versioned memory** from 34% to 56% overall, and from 40% to 90% on "what moved in a time window?".
 - **Predicted trajectories cost little.** Scores with Lost & Found predictions stay within 2 percentage points of ground truth. The median placement error on test recordings is 3 cm.
+- **Only versioned memory answers the history question.** On "where was it placed before its latest move?" versioned memory answers 28% with text search and 23% with hybrid search. Static and overwrite memory answer at most 12%.
 
 ![The three memory policies](figures/00_memory_policies.png)
 
@@ -79,6 +80,9 @@ This study asks three questions:
 
 *Effect of the single dev tuning round*
 
+![The history question: where was the object placed before its latest move?](figures/11_history_question_test.png)
+
+*The history question: where was the object placed before its latest move?*
 
 Tables with confidence intervals and paired tests: [`figures/tables_test.md`](figures/tables_test.md). Every figure is built from the traces in `results/`.
 Reports: [`REPORT.md`](REPORT.md), [`SUMMARY.md`](SUMMARY.md). Deviations from the plan: [`DEVIATIONS.md`](DEVIATIONS.md). Costs: [`COSTS.md`](COSTS.md).
@@ -88,12 +92,13 @@ Reports: [`REPORT.md`](REPORT.md), [`SUMMARY.md`](SUMMARY.md). Deviations from t
 - **History is needed, and each simpler policy fails one question class.** Static memory cannot answer "now" (0%). Overwrite memory cannot answer "before" (0%).
 - **Hybrid retrieval matters most when memory holds many versions.** For versioned memory the paired gain is +0.28 (McNemar p = 2.2e-08). For overwrite memory it is smaller.
 - **Versioned and overwrite memory are level overall with this model.** 56% against 55% (paired p = 0.27). Versioned memory is stronger on time-window questions (90% against 60%). It is weaker on "where is it now?" (58% against 92%). In 12 of its 15 failures on that question the model had retrieved entries of the right object and still gave a wrong position. In 3 it gave no position.
+- **Keeping history pays off on the question that needs it.** Versioned memory answers 28% against at most 12% for the other policies (paired p = 0.0081, 90 questions). Hybrid search did not help on this question (23% hybrid against 28% text, paired p = 0.61). Overwrite memory gets 10 of its 11 correct answers only where the object was placed twice at the same spot.
 - **Perception noise is not the bottleneck here.** Median placement error is 3 cm, well inside the 0.25 m tolerance. A tolerance sweep (figure 05) shows the same picture at other tolerances.
 
 | Hypothesis | Outcome |
 |---|---|
 | H1. A rebuilt ReMEmbR-style agent matches published correctness | Not tested. The NaVQA validation was not run. |
-| H2. Static fails "now", overwrite fails "before", versioned answers both | The first two held. Versioned answered both only in part with this model. |
+| H2. Static fails "now", overwrite fails "before", versioned answers both | The first two held. On the history question versioned memory answers 28% against at most 12% for the other policies. |
 | H3. Hybrid retrieval helps most on temporal questions | Held for versioned memory. Smaller effect for overwrite memory. |
 | H4. Predicted trajectories lower accuracy only slightly | Held. Largest gap 2 percentage points. |
 
@@ -103,7 +108,7 @@ Reports: [`REPORT.md`](REPORT.md), [`SUMMARY.md`](SUMMARY.md). Deviations from t
 - [x] Three memory policies and two retrieval designs on Lost & Found, with ground-truth and predicted events
 - [x] Dev/test split by recording, frozen prompts, confidence intervals and paired tests
 - [x] Figures and tables generated from result files
-- [ ] A history question that only versioned memory can answer ("where was it placed before its latest move?")
+- [x] A history question that only versioned memory can answer ("where was it placed before its latest move?")
 - [ ] Remove the text-tool confound: let text-only search accept an object argument
 - [ ] Repeat the key settings with a stronger model (Gemini)
 - [ ] Chained timelines, so each move starts where the previous one ended

@@ -330,7 +330,11 @@ def fig_timelines(d: pd.DataFrame, out: Path, split="test") -> pd.DataFrame:
 def fig_tuning(root: str, out: Path) -> None:
     def load(name):
         rows = [json.loads(l) for f in sorted(Path(root, name).glob("*.jsonl")) for l in f.read_text().splitlines() if l.strip()]
-        return pd.DataFrame(rows).groupby("cell").score.mean().reindex(CELLS) if rows else None
+        if not rows:
+            return None
+        from dynmem.stage_b.questions import CORE_QTYPES
+        df = pd.DataFrame(rows)
+        return df[df.qtype.isin(CORE_QTYPES)].groupby("cell").score.mean().reindex(CELLS)
     a, b = load("dev_round1"), load("dev")
     if a is None or b is None:
         return
@@ -401,7 +405,47 @@ def now_failure_analysis(d: pd.DataFrame, cell: str = "M2_R1", split: str = "tes
     return c
 
 
-def make_all(d, s, out: Path, split: str, dev_root: str) -> None:
+# 11. The history question: only a memory that keeps history can answer it
+def history_summary(d_all: pd.DataFrame) -> pd.DataFrame:
+    from dynmem.stats import bootstrap_ci
+    h = d_all[d_all.qtype == "previous_place"]
+    out = []
+    for (src, cell), g in h.groupby(["source", "cell"]):
+        m, lo, hi = bootstrap_ci(g["score"].to_numpy())
+        out.append({"source": src, "cell": cell, "n": len(g), "mean": m, "ci_lo": lo, "ci_hi": hi})
+    return pd.DataFrame(out)
+
+
+def fig_history(d_all: pd.DataFrame, out: Path, split="test") -> pd.DataFrame | None:
+    h = history_summary(d_all)
+    if h.empty:
+        return None
+    h.to_csv(f"results/benchmark_history_question_{split}.csv", index=False)
+    g = h[h.source == "gt_event"].set_index("cell").reindex(CELLS)
+    pr = h[h.source == "pred_event"].set_index("cell").reindex(CELLS) if "pred_event" in set(h.source) else None
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    xs = {"M0_R0": 0, "M0_R1": 1, "M1_R0": 2.5, "M1_R1": 3.5, "M2_R0": 5, "M2_R1": 6, "blind": 8.1}
+    for c in CELLS:
+        m, lo, hi = g.loc[c, ["mean", "ci_lo", "ci_hi"]]
+        ax.bar(xs[c], m, 0.85, **bar_kwargs(c))
+        ax.errorbar(xs[c], m, yerr=[[m - lo], [hi - m]], color=INK, lw=1.3, capsize=3)
+        ax.text(xs[c], hi + 0.03, f"{m:.0%}", ha="center", fontsize=10.5, fontweight="bold")
+        if pr is not None and not pd.isna(pr.loc[c, "mean"]):
+            ax.scatter(xs[c], pr.loc[c, "mean"], marker="D", s=40, facecolor=SURFACE, edgecolor=INK, zorder=4)
+    ax.set_xticks([xs[c] for c in CELLS], [("text" if c.endswith("R0") else "hybrid") if c != "blind" else "" for c in CELLS])
+    for name, x in (("Static", 0.5), ("Overwrite", 3.0), ("Versioned", 5.5), ("No memory", 8.1)):
+        ax.text(x, -0.115, name, transform=ax.get_xaxis_transform(), ha="center", va="top", fontsize=10.5, fontweight="bold")
+    ax.set_ylim(0, 1); ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}"); ax.grid(axis="x", visible=False)
+    ax.set_ylabel("Questions answered correctly")
+    extra = [Line2D([], [], marker="D", ls="", mfc=SURFACE, mec=INK, label="with predicted events")] if pr is not None else []
+    design_legend(ax, loc="upper left", extra=extra)
+    n = int(g["n"].max())
+    ax.set_title(f"\"Where was it placed before its latest move?\" ({n} questions per setting)")
+    save(fig, out, f"11_history_question_{split}.png")
+    return h
+
+
+def make_all(d, s, out: Path, split: str, dev_root: str, d_all=None) -> None:
     style()
     fig_policies(out)
     fig_pipeline(out)
@@ -418,3 +462,5 @@ def make_all(d, s, out: Path, split: str, dev_root: str) -> None:
     fig_timelines(d, out, split)
     fig_tuning(dev_root, out)
     now_failure_analysis(d, "M2_R1", split)
+    if d_all is not None:
+        fig_history(d_all, out, split)
